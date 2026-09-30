@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Gradle / Android Studio
+.gradle/
+build/
+.kotlin/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing & secrets
+*.jks
+*.keystore
+keystore.properties
+*.p12
+*.pem
+.env
+
+# Go / macOS app build output
+/macos/dist/
+*.app/
+
+# Xcode (in case anyone opens the cgo shim in Xcode)
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
