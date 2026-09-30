@@ -1,4 +1,4 @@
-package io.github.imostrovskiy.pixelhotspot
+package io.github.imostrovskiy.untether
 
 import android.Manifest.permission.BLUETOOTH_ADVERTISE
 import android.Manifest.permission.BLUETOOTH_CONNECT

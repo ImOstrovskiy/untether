@@ -46,7 +46,7 @@ static NSString *lastNetworkSSID;
 static NSURL *networkFile(void) {
     NSURL *dir = [[NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory
                                                        inDomains:NSUserDomainMask].firstObject
-        URLByAppendingPathComponent:@"PixelHotspot"];
+        URLByAppendingPathComponent:@"Untether"];
     [NSFileManager.defaultManager createDirectoryAtURL:dir withIntermediateDirectories:YES attributes:nil error:nil];
     return [dir URLByAppendingPathComponent:@"network.data"];
 }
@@ -147,7 +147,7 @@ void phtObserveSleep(void) {
     if (rootPort) IONotificationPortSetDispatchQueue(port, dispatch_queue_create("sleep", NULL));
 }
 
-// pixelhotspot:// URLs (Info.plist CFBundleURLTypes).
+// untether:// URLs. Not wired up yet: needs CFBundleURLTypes in Info.plist and a caller in Go.
 @interface PHTURLHandler : NSObject
 @end
 

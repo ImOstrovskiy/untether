@@ -1,4 +1,4 @@
-// Pixel Hotspot: menu bar app that turns on a Pixel's Wi-Fi hotspot over BLE and joins it.
+// Untether: menu bar app that turns on a Pixel's Wi-Fi hotspot over BLE and joins it.
 package main
 
 import (
@@ -340,7 +340,7 @@ func (a *app) setOnHotspot(v bool) {
 
 func configPath() string {
 	dir, _ := os.UserConfigDir()
-	return filepath.Join(dir, "PixelHotspot", "config.json")
+	return filepath.Join(dir, "Untether", "config.json")
 }
 
 func loadConfig() (c config) {
@@ -364,10 +364,10 @@ func (c config) save() error {
 // ponytail: the log file is never rotated; add rotation if it ever gets big.
 func setupLog() {
 	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, "Library", "Logs", "PixelHotspot")
+	dir := filepath.Join(home, "Library", "Logs", "Untether")
 	var w io.Writer = os.Stderr
 	if err := os.MkdirAll(dir, 0o755); err == nil {
-		if f, err := os.OpenFile(filepath.Join(dir, "pixel-hotspot.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+		if f, err := os.OpenFile(filepath.Join(dir, "untether.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 			w = io.MultiWriter(os.Stderr, f)
 		}
 	}

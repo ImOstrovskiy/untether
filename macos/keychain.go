@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	kcService = "io.github.imostrovskiy.pixelhotspot"
+	kcService = "io.github.imostrovskiy.untether"
 	kcAccount = "pairing"
 )
 
@@ -34,7 +34,7 @@ func savePairing(p Pairing) error {
 	item.SetSecClass(keychain.SecClassGenericPassword)
 	item.SetService(kcService)
 	item.SetAccount(kcAccount)
-	item.SetLabel("Pixel Hotspot pairing")
+	item.SetLabel("Untether pairing")
 	item.SetData(data)
 	item.SetAccessible(keychain.AccessibleAfterFirstUnlockThisDeviceOnly)
 	item.SetSynchronizable(keychain.SynchronizableNo)

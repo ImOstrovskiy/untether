@@ -1,4 +1,4 @@
-package io.github.imostrovskiy.pixelhotspot
+package io.github.imostrovskiy.untether
 
 import android.app.Application
 import android.util.Log
@@ -23,7 +23,7 @@ object AppLog {
     val lines: StateFlow<List<String>> = _lines
 
     fun log(msg: String) {
-        Log.i("PixelHotspot", msg)
+        Log.i("Untether", msg)
         val line = "${LocalTime.now().truncatedTo(ChronoUnit.SECONDS)} $msg"
         _lines.update { (it + line).takeLast(200) }
     }

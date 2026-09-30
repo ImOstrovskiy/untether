@@ -1,6 +1,10 @@
-# Pixel Hotspot Toggle — BLE protocol v1 (frozen)
+# Untether — BLE protocol v1
 
-Pixel = GATT peripheral (server), Mac = central (client).
+Phone = GATT peripheral (server), Mac = central (client).
+
+v1 was frozen with ops `0x01`–`0x03` and the base state keys. Everything added
+later is backward compatible: new ops, new ATT errors and optional state keys
+that readers ignore when they do not know them. Such additions are marked *(v1.1)*.
 
 ## UUIDs
 
@@ -44,17 +48,23 @@ Changing SSID/passphrase on the phone requires pairing the Mac again.
 ## Commands
 
 1. Read `nonce` → 16 random bytes.
-2. Write `command` (49 bytes):
+2. Write `command` (49 bytes, plus an argument for some ops):
 
    ```
-   op(1) ‖ nonce(16) ‖ HMAC-SHA256(k, op ‖ nonce)(32)
+   op(1) ‖ nonce(16) ‖ arg(0–64) ‖ HMAC-SHA256(k, op ‖ nonce ‖ arg)(32)
    ```
 
-   | op | meaning |
-   |----|---------|
-   | `0x01` | ON — start Wi-Fi tethering with the paired SSID/passphrase |
-   | `0x02` | OFF — stop Wi-Fi tethering (whoever started it) |
-   | `0x03` | STATUS — refresh telemetry and notify `state` |
+   | op | arg | meaning |
+   |----|-----|---------|
+   | `0x01` | — | ON — start Wi-Fi tethering with the paired SSID/passphrase |
+   | `0x02` | — | OFF — stop Wi-Fi tethering (whoever started it) |
+   | `0x03` | — | STATUS — notify `state` now |
+   | `0x04` | — | RING — toggle find-my-phone (alarm + vibration, stops after 20 s) *(v1.1)* |
+   | `0x05` | MAC, 6 bytes | BLOCK — add a client to the hotspot blocklist; it is dropped at once *(v1.1)* |
+   | `0x06` | — | UNBLOCK_ALL — clear the blocklist *(v1.1)* |
+   | `0x07` | subscription id, int32 BE | SET_DATA_SIM — use this SIM for mobile data *(v1.1)* |
+   | `0x08` | — | RECONNECT_DATA — mobile data off and on again *(v1.1)* |
+   | `0x09` | — | STOP_FIND_MAC — clear the phone's find-my-Mac request *(v1.1)* |
 
    The value may arrive as a single write or as a long (prepared) write.
 3. The server regenerates `nonce` after **every** write to `command`,
@@ -67,7 +77,8 @@ Changing SSID/passphrase on the phone requires pairing the Mac again.
    | `0x00` | accepted; the result shows up in `state` |
    | `0x80` | rejected: wrong length, stale nonce or bad HMAC (not distinguished) |
    | `0x81` | unknown op (HMAC was valid) |
-   | `0x82` | ON/OFF impossible: Shizuku not running or no permission |
+   | `0x82` | impossible now: Shizuku not running or no permission (ops `0x01`, `0x02`, `0x05`–`0x08`) |
+   | `0x84` | ON refused: battery below the battery-guard threshold and not charging *(v1.1)* |
 
    HMAC comparison is constant-time.
 
@@ -76,7 +87,8 @@ Changing SSID/passphrase on the phone requires pairing the Mac again.
 `state` holds one CBOR map (≤ 512 bytes). A notification carries the same
 bytes; when the value is longer than ATT_MTU − 3 the notification carries
 an empty value and the Mac reads the characteristic (long read).
-The server notifies on every change.
+The server notifies on every change and at least every 60 s *(v1.1)*; the Mac
+treats 150 s without state on a live link as a dead link and reconnects.
 
 | key | type | meaning |
 |-----|------|---------|
@@ -91,6 +103,16 @@ The server notifies on every change.
 | `net` | uint | cellular: 0 none, 1 3G (or older), 2 LTE, 3 5G NSA, 4 5G SA |
 | `sig` | uint | signal level 0–4 |
 | `shz` | uint | Shizuku: 0 ok, 1 not running, 2 no permission |
+| `op` | tstr | mobile operator name *(v1.1, optional)* |
+| `rsrp` | int | RSRP, dBm (5G if present, else LTE) *(v1.1, optional)* |
+| `snr` | int | SINR, dB *(v1.1, optional)* |
+| `temp` | int | battery temperature, °C *(v1.1, optional)* |
+| `sims` | array | active SIMs: map `{id: int, n: tstr}` *(v1.1, optional)* |
+| `dsim` | int | subscription id used for mobile data *(v1.1, optional)* |
+| `blk` | uint | clients on the blocklist, present when > 0 *(v1.1)* |
+| `bmin` | uint | battery-guard threshold %, present when enabled *(v1.1)* |
+| `ring` | bool | find-my-phone is ringing, present when true *(v1.1)* |
+| `fmac` | bool | the phone asks the Mac to play a sound, present when true *(v1.1)* |
 
 Readers must ignore unknown keys.
 
@@ -119,3 +141,6 @@ the next command or `AP ENABLING`.
 - The Mac connects to the first peripheral that advertises the service,
   stays connected and subscribed to `state` while the phone is in range, and
   reconnects automatically.
+- **Find my Mac** *(v1.1)*: while `fmac` is true the Mac shows the popover and
+  plays a sound; its Stop button sends `0x09`. The phone clears `fmac` by
+  itself after 30 s.

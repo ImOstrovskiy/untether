@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    namespace = "io.github.imostrovskiy.pixelhotspot"
+    namespace = "io.github.imostrovskiy.untether"
     compileSdk {
         version = release(37) { minorApiLevel = 2 }
     }
     defaultConfig {
-        applicationId = "io.github.imostrovskiy.pixelhotspot"
+        applicationId = "io.github.imostrovskiy.untether"
         minSdk = 37
         targetSdk = 37
         versionCode = 1

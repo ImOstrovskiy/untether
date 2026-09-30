@@ -1,4 +1,4 @@
-package io.github.imostrovskiy.pixelhotspot
+package io.github.imostrovskiy.untether
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
@@ -46,7 +46,7 @@ class Pairing(val secret: ByteArray, val ssid: String, val pass: String) {
             val abc = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
             return Pairing(
                 ByteArray(32).also(rng::nextBytes),
-                "Pixel-%04X".format(rng.nextInt(0x10000)),
+                "Untether-%04X".format(rng.nextInt(0x10000)),
                 String(CharArray(16) { abc[rng.nextInt(abc.length)] }),
             )
         }

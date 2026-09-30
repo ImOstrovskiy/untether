@@ -1,4 +1,4 @@
-package io.github.imostrovskiy.pixelhotspot
+package io.github.imostrovskiy.untether
 
 import android.os.IBinder
 import rikka.shizuku.Shizuku

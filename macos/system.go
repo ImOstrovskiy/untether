@@ -107,7 +107,7 @@ func goHotKey() { go onHotKey() }
 
 // Launch at login through a LaunchAgent (SMAppService needs an Objective-C/Swift host app).
 
-const agentLabel = "io.github.imostrovskiy.pixelhotspot"
+const agentLabel = "io.github.imostrovskiy.untether"
 
 func agentPath() string {
 	home, _ := os.UserHomeDir()

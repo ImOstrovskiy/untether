@@ -28,8 +28,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 | [Shizuku-API](https://github.com/RikkaApps/Shizuku-API) | android | MIT |
 | [AndroidHiddenApiBypass](https://github.com/LSPosed/AndroidHiddenApiBypass) | android | Apache-2.0 |
 | [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) | android | Apache-2.0 |
+| [Jetpack Compose, Material 3, AndroidX Activity/Lifecycle](https://developer.android.com/jetpack) | android | Apache-2.0 |
+| [Material Symbols](https://github.com/google/material-design-icons) (icons) | android, macos | Apache-2.0 |
 | [tinygo-org/bluetooth](https://github.com/tinygo-org/bluetooth) | macos | BSD-3-Clause |
-| [fyne-io/systray](https://github.com/fyne-io/systray) | macos | Apache-2.0 |
 | [fxamacker/cbor](https://github.com/fxamacker/cbor) | macos | MIT |
 | [keybase/go-keychain](https://github.com/keybase/go-keychain) | macos | MIT |
 

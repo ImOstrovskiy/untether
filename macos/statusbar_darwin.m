@@ -36,7 +36,7 @@ static const CGFloat kWidth = 340;
     self.item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
     self.item.button.target = self;
     self.item.button.action = @selector(toggle:);
-    self.item.button.toolTip = @"Pixel Hotspot";
+    self.item.button.toolTip = @"Untether";
 }
 
 - (void)toggle:(id)sender {

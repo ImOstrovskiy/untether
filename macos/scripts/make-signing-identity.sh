@@ -1,9 +1,9 @@
 #!/bin/sh
-# Creates a self-signed code signing identity "Pixel Hotspot Dev" in the login keychain.
+# Creates a self-signed code signing identity "Untether Dev" in the login keychain.
 # Rebuilt app bundles then keep the same signature, so the Keychain stops asking for access
 # to the pairing after every build. Run once; `make app` picks the identity up automatically.
 set -e
-NAME="Pixel Hotspot Dev"
+NAME="Untether Dev"
 if security find-identity -p codesigning | grep -q "$NAME"; then
     echo "\"$NAME\" already exists"
     exit 0

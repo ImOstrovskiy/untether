@@ -1,15 +1,27 @@
 # Decisions
 
+## D0. Name: Untether
+
+The project started as "Pixel Hotspot Toggle". Nothing in it is Pixel-specific
+beyond what it was tested on, so it is called **Untether**; identifiers are
+`io.github.imostrovskiy.untether`. The name was checked for collisions with
+existing hotspot/tethering products.
+
 ## D1. macOS client is written in Go, not Swift
 
-- Menu bar: `fyne.io/systray`; the binary is wrapped in a `.app` bundle with
-  `LSUIElement=true` (no Dock icon).
+- Menu bar: an `NSStatusItem` with an `NSPopover` whose content is a
+  `WKWebView` showing `macos/ui/index.html` (embedded with `go:embed`); JS talks
+  to Go through a script message handler, Go pushes state with
+  `evaluateJavaScript`. This replaced a plain `fyne.io/systray` menu when the UI
+  grew tabs, meters and live charts. The bundle has `LSUIElement=true`.
 - BLE central: `tinygo.org/x/bluetooth` (CoreBluetooth underneath). LE Secure
   Connections pairing is triggered by macOS on first access to an encrypted
   characteristic.
 - CBOR: `github.com/fxamacker/cbor/v2`; HMAC: stdlib.
 - Keychain: `github.com/keybase/go-keychain` (native API; `go-keyring` shells
-  out to `security`, which leaks the item ACL to any process).
+  out to `security`, which leaks the item ACL to any process). Builds are
+  signed with a local self-signed identity (`scripts/make-signing-identity.sh`)
+  so the Keychain ACL survives rebuilds.
 - Wi-Fi join / SSID / sleep notifications: small cgo + Objective-C shim over
   CoreWLAN, CoreLocation, NSWorkspace.
 - Launch at login: LaunchAgent plist instead of `SMAppService`.
@@ -84,3 +96,29 @@ See `protocol/PROTOCOL.md`.
   an empty value that tells the Mac to read.
 - Characteristics use `PERMISSION_*_ENCRYPTED`, not `_MITM`: commands are
   authenticated by HMAC anyway, and macOS may fall back to Just Works.
+
+## D5. Android UI: Jetpack Compose, Material 3 only
+
+Dynamic color (Material You), Material Symbols as vector drawables, a large
+collapsing top app bar, cards of list items, segmented buttons for the data
+SIM, simple dialogs with radio options for settings, an adaptive launcher icon
+with a monochrome layer. Strings in English and Ukrainian; the app
+language can be chosen per app in Android settings.
+
+## D6. Faster Mac join: stable BSSID, fixed channel, cached network
+
+Since Android 13 the default `SoftApConfiguration` randomizes the BSSID every
+session, and automatic channel selection moves the AP between channels (seen:
+36 then 40). Both make macOS treat each session as a new network and scan for
+it. The phone now writes MAC randomization "persistent" and 5 GHz channel 36
+into the system hotspot config; the Mac keeps the `CWNetwork` from the last
+join on disk and associates to it directly, falling back to a scan once if it
+fails. Measured: 4–5 s from click to internet instead of 9–30 s.
+
+## D7. Watchdogs
+
+The phone re-sends `state` every minute and, on the same tick, reopens the GATT
+server or restarts advertising if either is gone. The Mac drops a link that has
+been silent for 150 s, disconnects on any GATT timeout (the phone app restarted
+under a live link), and resets its Bluetooth adapter after five short-lived
+sessions in a row.

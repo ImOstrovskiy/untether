@@ -1,4 +1,4 @@
-package io.github.imostrovskiy.pixelhotspot
+package io.github.imostrovskiy.untether
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -57,19 +57,19 @@ import rikka.shizuku.ShizukuProvider
 /** Foreground service: BLE GATT server + advertising, hotspot control, telemetry. */
 class HotspotService : Service() {
     companion object {
-        const val ACTION_ON = "io.github.imostrovskiy.pixelhotspot.ON"
-        const val ACTION_OFF = "io.github.imostrovskiy.pixelhotspot.OFF"
-        const val ACTION_PAIR = "io.github.imostrovskiy.pixelhotspot.PAIR"
-        const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.pixelhotspot.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
-        const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.pixelhotspot.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
-        const val ACTION_BLOCK = "io.github.imostrovskiy.pixelhotspot.BLOCK" // extra EXTRA_MAC
+        const val ACTION_ON = "io.github.imostrovskiy.untether.ON"
+        const val ACTION_OFF = "io.github.imostrovskiy.untether.OFF"
+        const val ACTION_PAIR = "io.github.imostrovskiy.untether.PAIR"
+        const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.untether.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
+        const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.untether.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
+        const val ACTION_BLOCK = "io.github.imostrovskiy.untether.BLOCK" // extra EXTRA_MAC
         const val EXTRA_VALUE = "value"
         const val EXTRA_MAC = "mac"
-        const val ACTION_UNBLOCK_ALL = "io.github.imostrovskiy.pixelhotspot.UNBLOCK_ALL"
-        const val ACTION_STOP_RING = "io.github.imostrovskiy.pixelhotspot.STOP_RING"
-        const val ACTION_FIND_MAC = "io.github.imostrovskiy.pixelhotspot.FIND_MAC"
-        const val ACTION_RECONNECT_DATA = "io.github.imostrovskiy.pixelhotspot.RECONNECT_DATA"
-        const val ACTION_SET_DATA_SIM = "io.github.imostrovskiy.pixelhotspot.SET_DATA_SIM" // extra EXTRA_SUB_ID
+        const val ACTION_UNBLOCK_ALL = "io.github.imostrovskiy.untether.UNBLOCK_ALL"
+        const val ACTION_STOP_RING = "io.github.imostrovskiy.untether.STOP_RING"
+        const val ACTION_FIND_MAC = "io.github.imostrovskiy.untether.FIND_MAC"
+        const val ACTION_RECONNECT_DATA = "io.github.imostrovskiy.untether.RECONNECT_DATA"
+        const val ACTION_SET_DATA_SIM = "io.github.imostrovskiy.untether.SET_DATA_SIM" // extra EXTRA_SUB_ID
         const val EXTRA_SUB_ID = "sub_id"
         private const val FIND_MAC_MS = 30_000L
         private const val HEARTBEAT_MS = 60_000L
@@ -292,7 +292,7 @@ class HotspotService : Service() {
         val target = (if (shizukuLink) packageManager.getLaunchIntentForPackage(ShizukuProvider.MANAGER_APPLICATION_ID) else null)
             ?: Intent(this, MainActivity::class.java)
         return Notification.Builder(this, "service")
-            .setSmallIcon(R.drawable.ic_wifi_tethering)
+            .setSmallIcon(R.drawable.ic_untether)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setOngoing(true)

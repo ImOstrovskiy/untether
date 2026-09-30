@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pixel Hotspot</string>
+    <string name="app_name">Untether</string>
     <string name="hotspot">Hotspot</string>
     <string name="hs_off">Off</string>
     <string name="hs_starting">Starting…</string>
@@ -10,7 +10,7 @@
     <string name="shizuku_not_running">Shizuku is not running</string>
     <string name="shizuku_not_running_body">Start Shizuku to control the hotspot.</string>
     <string name="shizuku_no_permission">Shizuku permission needed</string>
-    <string name="shizuku_no_permission_body">Allow Pixel Hotspot in Shizuku.</string>
+    <string name="shizuku_no_permission_body">Allow Untether in Shizuku.</string>
     <string name="open_shizuku">Open Shizuku</string>
     <string name="grant">Grant</string>
     <string name="perm_title">Bluetooth access needed</string>

@@ -9,7 +9,7 @@
     <string name="shizuku_not_running">Shizuku не запущено</string>
     <string name="shizuku_not_running_body">Запустіть Shizuku, щоб керувати точкою доступу.</string>
     <string name="shizuku_no_permission">Потрібен дозвіл Shizuku</string>
-    <string name="shizuku_no_permission_body">Дозвольте Pixel Hotspot у Shizuku.</string>
+    <string name="shizuku_no_permission_body">Дозвольте Untether у Shizuku.</string>
     <string name="open_shizuku">Відкрити Shizuku</string>
     <string name="grant">Надати</string>
     <string name="perm_title">Потрібен доступ до Bluetooth</string>

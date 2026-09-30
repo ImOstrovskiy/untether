@@ -1,4 +1,4 @@
-module github.com/imostrovskiy/pixel-hotspot-toggle/macos
+module github.com/imostrovskiy/untether/macos
 
 go 1.26.3
 
