@@ -12,8 +12,27 @@ android {
         applicationId = "io.github.imostrovskiy.untether"
         minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.2.0"
+        // CI passes -PversionName=1.2.3 -PversionCode=<run number>.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.2.0"
+    }
+    // Release signing comes from the environment (CI secrets); nothing secret lives in the repo.
+    val keystore = System.getenv("UNTETHER_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = file(keystore)
+            storePassword = System.getenv("UNTETHER_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("UNTETHER_KEY_ALIAS")
+            keyPassword = System.getenv("UNTETHER_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
+        }
     }
     buildFeatures { compose = true }
 }
