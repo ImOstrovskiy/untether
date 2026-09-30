@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
@@ -94,7 +95,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         val REQUIRED = arrayOf(BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT)
-        val PERMISSIONS = REQUIRED + arrayOf(POST_NOTIFICATIONS, READ_PHONE_STATE)
+        val PERMISSIONS = REQUIRED + READ_PHONE_STATE + if (Build.VERSION.SDK_INT >= 33) arrayOf(POST_NOTIFICATIONS) else emptyArray()
 
         fun hasRequired(ctx: Context) = REQUIRED.all { ctx.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     }

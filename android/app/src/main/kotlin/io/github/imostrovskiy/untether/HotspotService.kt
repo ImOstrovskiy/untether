@@ -1,5 +1,6 @@
 package io.github.imostrovskiy.untether
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -32,6 +33,7 @@ import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.MacAddress
+import android.os.Build
 import android.os.ParcelUuid
 import android.os.SystemClock
 import android.os.VibrationEffect
@@ -54,7 +56,13 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import rikka.shizuku.ShizukuProvider
 
-/** Foreground service: BLE GATT server + advertising, hotspot control, telemetry. */
+/**
+ * Foreground service: BLE GATT server + advertising, hotspot control, telemetry.
+ *
+ * MissingPermission: the service is only started once BLUETOOTH_CONNECT/ADVERTISE are granted
+ * (MainActivity, BootReceiver), and revoking them kills the process.
+ */
+@SuppressLint("MissingPermission")
 class HotspotService : Service() {
     companion object {
         const val ACTION_ON = "io.github.imostrovskiy.untether.ON"
@@ -270,10 +278,21 @@ class HotspotService : Service() {
             for (d in subscribers.values) {
                 // Too long for one notification: an empty value tells the Mac to read.
                 val fits = stateBytes.size <= (mtu[d.address] ?: 23) - 3
-                gatt?.notifyCharacteristicChanged(d, ch, false, if (fits) stateBytes else ByteArray(0))
+                notify(d, ch, if (fits) stateBytes else ByteArray(0))
             }
         }
         updateNotification(p)
+    }
+
+    private fun notify(d: BluetoothDevice, ch: BluetoothGattCharacteristic, value: ByteArray) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            gatt?.notifyCharacteristicChanged(d, ch, false, value)
+        } else {
+            @Suppress("DEPRECATION")
+            ch.value = value
+            @Suppress("DEPRECATION")
+            gatt?.notifyCharacteristicChanged(d, ch, false)
+        }
     }
 
     private fun updateNotification(p: PhoneState) {

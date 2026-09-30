@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Untether</string>
+    <string name="app_name" translatable="false">Untether</string>
     <string name="hotspot">Hotspot</string>
     <string name="hs_off">Off</string>
     <string name="hs_starting">Starting…</string>

@@ -1,5 +1,6 @@
 package io.github.imostrovskiy.untether
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
@@ -13,6 +14,7 @@ import android.net.TetheringManager
 import android.net.wifi.SoftApConfiguration
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiSsid
+import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.SparseIntArray
@@ -29,7 +31,13 @@ import rikka.shizuku.Shizuku
  * the shell user. Approach after supershadoe/delta (BSD-3-Clause), see docs/DECISIONS.md (D2).
  *
  * All callbacks arrive on the main thread; call the public methods on the main thread too.
+ *
+ * NewApi is suppressed on purpose: TetheringManager (with TetheringRequest and the event callback)
+ * and SoftApConfiguration.Builder became public in API 36 but exist as @SystemApi since API 30,
+ * and HiddenApiBypass (see App) opens them. What really is newer is guarded by SDK_INT below.
+ * MissingPermission: these calls run as the shell user through Shizuku, which holds the permissions.
  */
+@SuppressLint("NewApi", "InlinedApi", "MissingPermission")
 class ShizukuHotspotController(
     private val ctx: Context,
     private val ssid: String,
@@ -81,7 +89,7 @@ class ShizukuHotspotController(
     ) { proxy, method, args -> onTetheringEvent(proxy, method, args) } as TetheringManager.TetheringEventCallback
 
     fun open() {
-        ctx.registerReceiver(apReceiver, IntentFilter(ACTION_AP_STATE), Context.RECEIVER_EXPORTED)
+        registerExported(ctx, apReceiver, IntentFilter(ACTION_AP_STATE))
         runCatching {
             onApState(ctx.getSystemService(WifiManager::class.java).call("getWifiApState") as Int)
         }.onFailure { AppLog.log("getWifiApState: $it") }
@@ -107,7 +115,7 @@ class ShizukuHotspotController(
             val request = TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI)
                 // Normally the system config already holds our SSID/passphrase (same as quick settings);
                 // if it could not be written, carry the config in the request.
-                .apply { if (!configSynced) setSoftApConfiguration(desiredConfig(null)) }
+                .apply { if (!configSynced && Build.VERSION.SDK_INT >= 36) setSoftApConfiguration(desiredConfig(null)) }
                 .build()
             tm.startTethering(request, ctx.mainExecutor, object : TetheringManager.StartTetheringCallback {
                 override fun onTetheringStarted() = AppLog.log("Tethering started")
@@ -219,8 +227,8 @@ class ShizukuHotspotController(
     private fun desiredConfig(base: SoftApConfiguration?): SoftApConfiguration {
         val b = base?.let { SoftApConfiguration.Builder::class.java.getConstructor(SoftApConfiguration::class.java).newInstance(it) }
             ?: SoftApConfiguration.Builder()
-        b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray()))
-            .setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
+        if (Build.VERSION.SDK_INT >= 33) b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray())) else b.call("setSsid", ssid)
+        b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
             // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
             // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
             .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
@@ -253,7 +261,8 @@ class ShizukuHotspotController(
             null
         }
         "onTetheredInterfacesChanged" -> {
-            (args!![0] as? Set<*>)?.let { ifaces ->
+            // The Set<TetheringInterface> overload carries the config only since API 36.
+            (args!![0] as? Set<*>)?.takeIf { Build.VERSION.SDK_INT >= 36 }?.let { ifaces ->
                 val wifi = ifaces.filterIsInstance<TetheringInterface>()
                     .firstOrNull { it.type == TetheringManager.TETHERING_WIFI }
                 tetheredSsid = wifi?.softApConfiguration?.wifiSsid?.bytes?.decodeToString()

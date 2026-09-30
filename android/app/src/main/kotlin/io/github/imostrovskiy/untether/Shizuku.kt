@@ -1,5 +1,9 @@
 package io.github.imostrovskiy.untether
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.Build
 import android.os.IBinder
 import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuBinderWrapper
@@ -23,3 +27,9 @@ fun shizukuShell(vararg cmd: String): Int? = runCatching {
     ).apply { isAccessible = true }
     (newProcess.invoke(null, arrayOf(*cmd), null, null) as Process).waitFor()
 }.onFailure { AppLog.log("shell ${cmd.joinToString(" ")} failed: $it") }.getOrNull()
+
+/** Receiver for system broadcasts; the exported flag exists (and is required) only since API 33. */
+fun registerExported(ctx: Context, receiver: BroadcastReceiver, filter: IntentFilter) {
+    if (Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+    else ctx.registerReceiver(receiver, filter)
+}

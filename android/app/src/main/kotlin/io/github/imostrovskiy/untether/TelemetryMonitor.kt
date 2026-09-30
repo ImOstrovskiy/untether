@@ -1,5 +1,6 @@
 package io.github.imostrovskiy.untether
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -60,6 +61,7 @@ class TelemetryMonitor(private val ctx: Context) {
         override fun onReceive(c: Context, i: Intent) = refreshSims()
     }
 
+    @SuppressLint("MissingPermission") // READ_PHONE_STATE is optional; without it the list stays empty
     fun refreshSims() {
         runCatching {
             val sims = subscriptions.activeSubscriptionInfoList.orEmpty()
@@ -70,7 +72,7 @@ class TelemetryMonitor(private val ctx: Context) {
 
     fun open() {
         ctx.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        ctx.registerReceiver(dataSimChanged, IntentFilter(ACTION_DATA_SIM_CHANGED), Context.RECEIVER_EXPORTED)
+        registerExported(ctx, dataSimChanged, IntentFilter(ACTION_DATA_SIM_CHANGED))
         runCatching { subscriptions.addOnSubscriptionsChangedListener(ctx.mainExecutor, simsChanged) }
         refreshSims()
         runCatching { telephony.registerTelephonyCallback(ctx.mainExecutor, radio) }
