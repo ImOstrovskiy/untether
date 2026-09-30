@@ -58,26 +58,24 @@
 
   header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--tile); }
-  .logo svg { width: 22px; height: 22px; }
+  .logo svg.mark { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .logo svg.mark circle { fill: currentColor; stroke: none; }
   header .title { font-weight: 650; font-size: 13px; }
   header .sub { color: var(--muted); font-size: 10.5px; display: flex; align-items: center; gap: 6px; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .dot.on { background: var(--accent); }
 
-  /* Hero: the big hotspot button */
-  .hero { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--radius);
-    background: var(--card); border: 1px solid var(--card-border); margin-bottom: 12px; }
-  .power { width: 62px; height: 62px; border-radius: 50%; border: none; flex: none; display: grid; place-items: center;
-    color: var(--muted); background: var(--tile); transition: all .25s ease; cursor: pointer; position: relative; }
-  .power svg { width: 30px; height: 30px; }
-  .power:hover:not(:disabled) { transform: scale(1.04); }
-  .power:disabled { opacity: .45; cursor: default; }
-  .power.on { color: var(--bg); background: var(--accent); }
-  .power.busy::after { content: ""; position: absolute; inset: -6px; border-radius: 50%;
-    border: 2px solid var(--accent); border-top-color: transparent; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .hero .state { font-size: 20.5px; font-weight: 650; }
-  .hero .detail { color: var(--muted); margin-top: 2px; }
+  /* The hotspot toggle: one row, like a Control Center module */
+  .hotspot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius);
+    background: var(--card); border: 1px solid var(--card-border); margin-bottom: 12px; cursor: pointer; }
+  .hotspot.disabled { cursor: default; opacity: .55; }
+  .hotspot .hs-icon { width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    background: var(--tile); color: var(--muted); transition: background .2s, color .2s; }
+  .hotspot.on .hs-icon { background: var(--accent); color: var(--bg); }
+  .hotspot .grow { flex: 1; min-width: 0; }
+  .hotspot .label { font-weight: 650; }
+  .hotspot .hint { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hotspot .switch.busy { opacity: .5; }
 
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px;
     font-size: 10.5px; font-weight: 600; background: var(--tile); color: var(--muted); white-space: nowrap; }
@@ -157,7 +155,7 @@
   #find .box { text-align: center; padding: 20px; }
   #find .ring { width: 90px; height: 90px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; color: var(--bg);
     background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
-  @media (prefers-reduced-motion: reduce) { #find .ring, .power.busy::after { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #find .ring { animation: none; } }
   #find .ring svg { width: 44px; height: 44px; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
   #find h3 { margin: 0 0 4px; font-size: 16.5px; color: #fff; }
@@ -187,7 +185,7 @@
 <script>
 const T = {
   en: {
-    connected: "Connected", searching: "Looking for the phone…", notPaired: "Not paired",
+    hotspot: "Hotspot", connected: "Connected", searching: "Looking for the phone…", notPaired: "Not paired",
     hs: ["Off", "Starting…", "On", "Stopping…", "Error"],
     tapOn: "Click to turn on", tapOff: "Click to turn off", joined: "Joined in {0} s", errCode: "Could not start (code {0})",
     tabOverview: "Overview", tabNetwork: "Network", tabDevices: "Devices", tabSettings: "Settings",
@@ -206,7 +204,7 @@ const T = {
     charging: "charging",
   },
   uk: {
-    connected: "Підключено", searching: "Шукаю телефон…", notPaired: "Не сполучено",
+    hotspot: "Точка доступу", connected: "Підключено", searching: "Шукаю телефон…", notPaired: "Не сполучено",
     hs: ["Вимкнено", "Вмикається…", "Увімкнено", "Вимикається…", "Помилка"],
     tapOn: "Клацніть, щоб увімкнути", tapOff: "Клацніть, щоб вимкнути", joined: "Під'єднано за {0} с", errCode: "Не вдалося увімкнути (код {0})",
     tabOverview: "Огляд", tabNetwork: "Мережа", tabDevices: "Пристрої", tabSettings: "Налаштування",
@@ -285,16 +283,16 @@ function draw() {
 
   let html = `
   <header>
-    <div class="logo"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 3.5 V13.5 A5 5 0 0 1 6 13.5 V12.5"/><circle cx="6" cy="7.6" r="1.9" fill="currentColor" stroke="none"/></svg></div>
+    <div class="logo"><svg class="mark" viewBox="0 0 24 24"><path d="M16 3.5 V13.5 A5 5 0 0 1 6 13.5 V12.5"/><circle cx="6" cy="7.6" r="1.9"/></svg></div>
     <div style="flex:1"><div class="title">Untether</div><div class="sub">${status}</div></div>
   </header>
-  <section class="hero">
-    <button class="power ${on ? "on" : ""} ${busy ? "busy" : ""}" ${canToggle ? "" : "disabled"} onclick="send('toggle')" title="${t(on ? "tapOff" : "tapOn")}">
-      ${icon(on ? "wifi_tethering" : "power_settings_new")}</button>
-    <div style="min-width:0">
-      <div class="state">${p ? t("hs")[hs] : "—"}</div>
-      <div class="detail">${esc(detail)}</div>
+  <section class="hotspot ${on ? "on" : ""} ${canToggle ? "" : "disabled"}" ${canToggle ? `onclick="send('toggle')"` : ""} title="${t(on ? "tapOff" : "tapOn")}">
+    <div class="hs-icon">${icon(on ? "wifi_tethering" : "wifi_tethering_off")}</div>
+    <div class="grow">
+      <div class="label">${t("hotspot")} · ${p ? t("hs")[hs] : "—"}</div>
+      <div class="hint">${esc(detail)}</div>
     </div>
+    <div class="switch ${on ? "on" : ""} ${busy ? "busy" : ""}"></div>
   </section>`;
 
   html += alerts(p);
