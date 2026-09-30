@@ -7,7 +7,8 @@
 
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple&logoColor=white">
-  <img alt="Android 17+" src="https://img.shields.io/badge/Android-17%2B-3DDC84?logo=android&logoColor=white">
+  <img alt="Android 12+" src="https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white">
+  <a href="https://github.com/ImOstrovskiy/untether/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/ImOstrovskiy/untether?color=111"></a>
   <img alt="No root" src="https://img.shields.io/badge/root-not%20needed-3DDC97">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Compose%20·%20Material%203-7F52FF?logo=kotlin&logoColor=white">
@@ -79,22 +80,35 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 | | Needs |
 |---|---|
-| Phone | Android 17 (API 37) or newer, [Shizuku](https://shizuku.rikka.app/) running. Developed on a Pixel 9 |
+| Phone | Android 12 (API 31) or newer, [Shizuku](https://shizuku.rikka.app/) running. Developed and tested on a Pixel 9 with Android 17 |
 | Mac | macOS 14+, Apple Silicon |
 | Build | Go 1.26 and Command Line Tools; Android SDK 37.2 and a JDK |
 
 ## Install
 
-**Phone**
+Download `Untether-<version>.apk` and `Untether-<version>.dmg` from
+[Releases](https://github.com/ImOstrovskiy/untether/releases/latest).
+
+**Phone.** Install the APK (allow installs from your browser or file manager), open Untether, grant
+the permissions, allow it in Shizuku and let it ignore battery optimization.
+
+**Mac.** Open the DMG and drag Untether to Applications. The app is signed with a self-signed
+certificate, not notarized, so the first launch needs a right-click → **Open** (or
+`xattr -dr com.apple.quarantine /Applications/Untether.app`). Allow Bluetooth, and Location (macOS
+needs it to tell which Wi-Fi network the Mac is on).
+
+**Pair once.** On the phone tap **Pair** in the Mac section; on the Mac open **Settings → Pair with
+phone…**; confirm the same code on both screens.
+
+### From source
 
 ```bash
 cd android && ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open Untether, grant the permissions, allow it in Shizuku and let it ignore battery optimization.
-
-**Mac.** Once, create a local signing identity so rebuilt apps keep their Keychain access:
+On the Mac, once, create a local signing identity so rebuilt apps keep their Keychain access, then
+build and install:
 
 ```bash
 macos/scripts/make-signing-identity.sh
@@ -104,10 +118,8 @@ macos/scripts/make-signing-identity.sh
 cd macos && make install && open /Applications/Untether.app
 ```
 
-Allow Bluetooth, and Location (macOS needs it to tell which Wi-Fi network the Mac is on).
-
-**Pair once.** On the phone tap **Pair** in the Mac section; on the Mac open **Settings → Pair with
-phone…**; confirm the same code on both screens.
+`make dmg VERSION=1.2.3` builds the disk image. CI builds both on every push to `main` and publishes
+a release for every `v*` tag.
 
 ## Development
 
