@@ -23,8 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import rikka.shizuku.Shizuku
-import rikka.shizuku.ShizukuBinderWrapper
-import rikka.shizuku.SystemServiceHelper
 
 /**
  * Wi-Fi hotspot control through Shizuku: binder calls to the tethering and wifi services run as
@@ -120,7 +118,7 @@ class ShizukuHotspotController(
             })
         } catch (e: Throwable) {
             AppLog.log("startTethering threw $e; fallback cmd wifi start-softap (no internet sharing)")
-            shell("cmd", "wifi", "start-softap", ssid, "wpa3_transition", pass)
+            AppLog.log("start-softap → exit ${shizukuShell("cmd", "wifi", "start-softap", ssid, "wpa3_transition", pass)}")
         }
     }
 
@@ -132,7 +130,7 @@ class ShizukuHotspotController(
             tm.call("stopTethering", TetheringManager.TETHERING_WIFI)
         } catch (e: Throwable) {
             AppLog.log("stopTethering threw $e; fallback cmd wifi stop-softap")
-            shell("cmd", "wifi", "stop-softap")
+            AppLog.log("stop-softap → exit ${shizukuShell("cmd", "wifi", "stop-softap")}")
         }
     }
 
@@ -188,9 +186,7 @@ class ShizukuHotspotController(
             AppLog.log("TetheringManager over Shizuku failed: $e")
         }
         try {
-            val service = Class.forName("android.net.wifi.IWifiManager\$Stub")
-                .getMethod("asInterface", IBinder::class.java)
-                .invoke(null, shizukuBinder("wifi"))
+            val service = shizukuService("wifi", "android.net.wifi.IWifiManager")
             // (Context, IWifiManager) on Android 17; AOSP main adds a Looper.
             val ctor = WifiManager::class.java.constructors.first { it.parameterCount in 2..3 && it.parameterTypes[0] == Context::class.java }
             val args = arrayOf<Any?>(shellContext, service, Looper.getMainLooper()).copyOf(ctor.parameterCount)
@@ -200,8 +196,6 @@ class ShizukuHotspotController(
             AppLog.log("WifiManager over Shizuku failed: $e")
         }
     }
-
-    private fun shizukuBinder(name: String) = SystemServiceHelper.getSystemService(name)?.let { ShizukuBinderWrapper(it) }
 
     /**
      * Writes our SSID, passphrase, a persistent (stable) BSSID and the auto-off timer into the system
@@ -281,21 +275,6 @@ class ShizukuHotspotController(
             ip = addresses.firstNotNullOfOrNull { (it?.call("getAddress") as? LinkAddress)?.address?.hostAddress },
             name = addresses.firstNotNullOfOrNull { it?.call("getHostname") as? String },
         )
-    }
-
-    /** Calls a (possibly hidden) public method by name and arity. */
-    private fun Any.call(name: String, vararg args: Any?): Any? =
-        javaClass.methods.first { it.name == name && it.parameterCount == args.size }.invoke(this, *args)
-
-    /** Shizuku.newProcess is private in API 13; it is still the shell entry point. */
-    private fun shell(vararg cmd: String) {
-        runCatching {
-            val newProcess = Shizuku::class.java.getDeclaredMethod(
-                "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java,
-            ).apply { isAccessible = true }
-            val p = newProcess.invoke(null, arrayOf(*cmd), null, null) as Process
-            AppLog.log("${cmd.take(3).joinToString(" ")} → exit ${p.waitFor()}")
-        }.onFailure { AppLog.log("shell failed: $it") }
     }
 
     private companion object {

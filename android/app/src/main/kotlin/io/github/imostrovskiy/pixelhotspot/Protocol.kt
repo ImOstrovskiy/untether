@@ -21,6 +21,9 @@ object Protocol {
     const val OP_RING = 0x04
     const val OP_BLOCK = 0x05 // arg: client MAC, 6 bytes
     const val OP_UNBLOCK_ALL = 0x06
+    const val OP_SET_DATA_SIM = 0x07 // arg: subscription id, int32 big-endian
+    const val OP_RECONNECT_DATA = 0x08
+    const val OP_STOP_FIND_MAC = 0x09
 
     const val ERR_REJECTED = 0x80
     const val ERR_UNKNOWN_OP = 0x81
@@ -68,10 +71,15 @@ data class Telemetry(
     val operator: String? = null,
     val rsrp: Int? = null,
     val snr: Int? = null,
+    val temperature: Int? = null, // battery, °C
+    val sims: List<Sim> = emptyList(), // active subscriptions
+    val dataSim: Int? = null, // subscription id used for mobile data
 )
 
+data class Sim(val id: Int, val name: String)
+
 /** Things the service adds on top of the hotspot controller. */
-data class Extras(val blocked: Int = 0, val batteryMin: Int = 0, val ringing: Boolean = false)
+data class Extras(val blocked: Int = 0, val batteryMin: Int = 0, val ringing: Boolean = false, val findMac: Boolean = false)
 
 data class PhoneState(
     val hotspot: HotspotState,
@@ -106,6 +114,10 @@ data class PhoneState(
             if (extras.blocked > 0) m["blk"] = extras.blocked
             if (extras.batteryMin > 0) m["bmin"] = extras.batteryMin
             if (extras.ringing) m["ring"] = true
+            telemetry.temperature?.let { m["temp"] = it }
+            if (telemetry.sims.isNotEmpty()) m["sims"] = telemetry.sims.map { linkedMapOf<String, Any>("id" to it.id, "n" to it.name) }
+            telemetry.dataSim?.let { m["dsim"] = it }
+            if (extras.findMac) m["fmac"] = true
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes
             shown = shown.dropLast(1)

@@ -9,6 +9,7 @@ import android.telephony.CellInfo
 import android.telephony.CellSignalStrengthLte
 import android.telephony.CellSignalStrengthNr
 import android.telephony.SignalStrength
+import android.telephony.SubscriptionManager
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyDisplayInfo
 import android.telephony.TelephonyManager
@@ -28,7 +29,8 @@ class TelemetryMonitor(private val ctx: Context) {
             val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) * 100 /
                 i.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
             val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
-            _telemetry.update { it.copy(battery = level, charging = plugged) }
+            val temp = i.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE }?.let { it / 10 }
+            _telemetry.update { it.copy(battery = level, charging = plugged, temperature = temp) }
         }
     }
 
@@ -50,14 +52,35 @@ class TelemetryMonitor(private val ctx: Context) {
         }
     }
 
+    private val subscriptions = ctx.getSystemService(SubscriptionManager::class.java)
+    private val simsChanged = object : SubscriptionManager.OnSubscriptionsChangedListener() {
+        override fun onSubscriptionsChanged() = refreshSims()
+    }
+    private val dataSimChanged = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = refreshSims()
+    }
+
+    fun refreshSims() {
+        runCatching {
+            val sims = subscriptions.activeSubscriptionInfoList.orEmpty()
+                .map { Sim(it.subscriptionId, it.displayName?.toString()?.trim().orEmpty().ifEmpty { "SIM ${it.simSlotIndex + 1}" }) }
+            _telemetry.update { it.copy(sims = sims, dataSim = SubscriptionManager.getDefaultDataSubscriptionId().takeIf { id -> id >= 0 }) }
+        }.onFailure { AppLog.log("SIM list: $it") }
+    }
+
     fun open() {
         ctx.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        ctx.registerReceiver(dataSimChanged, IntentFilter(ACTION_DATA_SIM_CHANGED), Context.RECEIVER_EXPORTED)
+        runCatching { subscriptions.addOnSubscriptionsChangedListener(ctx.mainExecutor, simsChanged) }
+        refreshSims()
         runCatching { telephony.registerTelephonyCallback(ctx.mainExecutor, radio) }
             .onFailure { AppLog.log("Telephony callback: $it (grant phone permission)") }
     }
 
     fun close() {
         ctx.unregisterReceiver(battery)
+        ctx.unregisterReceiver(dataSimChanged)
+        subscriptions.removeOnSubscriptionsChangedListener(simsChanged)
         runCatching { telephony.unregisterTelephonyCallback(radio) }
     }
 
@@ -71,3 +94,6 @@ class TelemetryMonitor(private val ctx: Context) {
         else -> 1
     }
 }
+
+/** Hidden TelephonyIntents.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED. */
+private const val ACTION_DATA_SIM_CHANGED = "android.intent.action.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED"

@@ -41,6 +41,8 @@ import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -62,6 +64,12 @@ class HotspotService : Service() {
         const val ACTION_CYCLE_BATTERY_MIN = "io.github.imostrovskiy.pixelhotspot.CYCLE_BATTERY_MIN"
         const val ACTION_UNBLOCK_ALL = "io.github.imostrovskiy.pixelhotspot.UNBLOCK_ALL"
         const val ACTION_STOP_RING = "io.github.imostrovskiy.pixelhotspot.STOP_RING"
+        const val ACTION_FIND_MAC = "io.github.imostrovskiy.pixelhotspot.FIND_MAC"
+        const val ACTION_RECONNECT_DATA = "io.github.imostrovskiy.pixelhotspot.RECONNECT_DATA"
+        const val ACTION_SET_DATA_SIM = "io.github.imostrovskiy.pixelhotspot.SET_DATA_SIM" // extra EXTRA_SUB_ID
+        const val EXTRA_SUB_ID = "sub_id"
+        private const val FIND_MAC_MS = 30_000L
+        private const val HEARTBEAT_MS = 60_000L
         private const val PAIRING_WINDOW_MS = 60_000L
         private const val RING_MS = 20_000L
         private const val NOTIFICATION_ID = 1
@@ -92,6 +100,9 @@ class HotspotService : Service() {
     private var notificationText = ""
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
     private val ringing = MutableStateFlow(false)
+    private val findMac = MutableStateFlow(false)
+    private var findMacStop: Job? = null
+    private val connected = ConcurrentHashMap<String, BluetoothDevice>()
     private var ringtone: Ringtone? = null
     private var ringStop: Job? = null
     private var batteryGuardFired = false
@@ -118,10 +129,11 @@ class HotspotService : Service() {
         telemetry = TelemetryMonitor(this).also { it.open() }
         registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         openGatt()
-        val extras = combine(hotspot.blocked, settings, ringing) { b, s, r -> Extras(b, s.batteryMin, r) }
+        val extras = combine(hotspot.blocked, settings, ringing, findMac) { b, s, r, f -> Extras(b, s.batteryMin, r, f) }
         combine(hotspot.state, hotspot.clients, telemetry.telemetry, hotspot.shizuku, extras, ::PhoneState)
             .onEach(::publish)
             .launchIn(scope)
+        scope.launch { watchdog() }
         AppLog.log("Service started")
     }
 
@@ -137,8 +149,55 @@ class HotspotService : Service() {
             ACTION_CYCLE_BATTERY_MIN -> updateSettings { it.copy(batteryMin = next(BATTERY_MIN_STEPS, it.batteryMin)) }
             ACTION_UNBLOCK_ALL -> hotspot.unblockAll()
             ACTION_STOP_RING -> ring(false)
+            ACTION_FIND_MAC -> findMac(!findMac.value)
+            ACTION_RECONNECT_DATA -> scope.launch { reconnectData() }
+            ACTION_SET_DATA_SIM -> intent.getIntExtra(EXTRA_SUB_ID, -1).takeIf { it >= 0 }?.let { setDataSim(it) }
         }
         return START_STICKY
+    }
+
+    /**
+     * Every minute: re-send the state (the Mac's watchdog expects it) and bring the GATT server and
+     * advertising back if they are gone (Bluetooth stack restarts, advertising dropped by the system).
+     */
+    private suspend fun watchdog() {
+        while (scope.isActive) {
+            delay(HEARTBEAT_MS)
+            if (gatt == null && bt.adapter?.isEnabled == true) {
+                AppLog.log("Watchdog: GATT server missing, reopening")
+                openGatt()
+            } else if (connected.isEmpty()) {
+                startAdvertising()
+            }
+            phone.value?.let(::publish)
+        }
+    }
+
+    /** Asks the Mac to play a sound; it stops by itself after [FIND_MAC_MS]. */
+    private fun findMac(on: Boolean) {
+        findMacStop?.cancel()
+        if (on) findMacStop = scope.launch {
+            delay(FIND_MAC_MS)
+            findMac(false)
+        }
+        if (findMac.value != on) AppLog.log(if (on) "Finding the Mac" else "Find Mac stopped")
+        findMac.value = on
+    }
+
+    /** Mobile data off and on again, as the shell user. */
+    private suspend fun reconnectData() = withContext(Dispatchers.IO) {
+        AppLog.log("Reconnecting mobile data")
+        shizukuShell("svc", "data", "disable")
+        delay(2_000)
+        val rc = shizukuShell("svc", "data", "enable")
+        AppLog.log("Mobile data back on (exit $rc)")
+    }
+
+    private fun setDataSim(subId: Int) {
+        runCatching { shizukuService("isub", "com.android.internal.telephony.ISub").call("setDefaultDataSubId", subId) }
+            .onSuccess { AppLog.log("Data SIM set to $subId") }
+            .onFailure { AppLog.log("Data SIM switch failed: $it") }
+        telemetry.refreshSims()
     }
 
     private fun next(steps: List<Int>, cur: Int) = steps[(steps.indexOf(cur) + 1) % steps.size]
@@ -180,6 +239,7 @@ class HotspotService : Service() {
         ring(false)
         scope.cancel()
         unregisterReceiver(btReceiver)
+        findMac(false)
         closeGatt()
         hotspot.close()
         telemetry.close()
@@ -301,12 +361,16 @@ class HotspotService : Service() {
             Protocol.verify(frame, nonce, credentials.secret).also { rng.nextBytes(nonce) }
         }
         val ok = BluetoothGatt.GATT_SUCCESS
-        val needsShizuku = cmd?.op in setOf(Protocol.OP_ON, Protocol.OP_OFF, Protocol.OP_BLOCK, Protocol.OP_UNBLOCK_ALL)
+        val needsShizuku = cmd?.op in setOf(
+            Protocol.OP_ON, Protocol.OP_OFF, Protocol.OP_BLOCK, Protocol.OP_UNBLOCK_ALL,
+            Protocol.OP_SET_DATA_SIM, Protocol.OP_RECONNECT_DATA,
+        )
         val status = when {
             cmd == null -> Protocol.ERR_REJECTED
             needsShizuku && hotspot.shizuku.value != ShizukuStatus.OK -> Protocol.ERR_SHIZUKU
             cmd.op == Protocol.OP_ON && batteryTooLow(telemetry.telemetry.value) -> Protocol.ERR_BATTERY_LOW
             cmd.op == Protocol.OP_BLOCK && cmd.arg.size != 6 -> Protocol.ERR_UNKNOWN_OP
+            cmd.op == Protocol.OP_SET_DATA_SIM && cmd.arg.size != 4 -> Protocol.ERR_UNKNOWN_OP
             else -> when (cmd.op) {
                 Protocol.OP_ON -> ok.also { scope.launch { hotspot.start() } }
                 Protocol.OP_OFF -> ok.also { scope.launch { hotspot.stop() } }
@@ -314,6 +378,12 @@ class HotspotService : Service() {
                 Protocol.OP_RING -> ok.also { scope.launch { ring(!ringing.value) } }
                 Protocol.OP_BLOCK -> ok.also { scope.launch { hotspot.block(MacAddress.fromBytes(cmd.arg)) } }
                 Protocol.OP_UNBLOCK_ALL -> ok.also { scope.launch { hotspot.unblockAll() } }
+                Protocol.OP_SET_DATA_SIM -> ok.also {
+                    val subId = java.nio.ByteBuffer.wrap(cmd.arg).int
+                    scope.launch { setDataSim(subId) }
+                }
+                Protocol.OP_RECONNECT_DATA -> ok.also { scope.launch { reconnectData() } }
+                Protocol.OP_STOP_FIND_MAC -> ok.also { scope.launch { findMac(false) } }
                 else -> Protocol.ERR_UNKNOWN_OP
             }
         }
@@ -324,6 +394,8 @@ class HotspotService : Service() {
     private val gattCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             val connected = newState == BluetoothProfile.STATE_CONNECTED
+            if (connected) this@HotspotService.connected[device.address] = device
+            else this@HotspotService.connected.remove(device.address)
             if (!connected) {
                 subscribers.remove(device.address)
                 mtu.remove(device.address)
