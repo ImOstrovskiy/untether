@@ -68,7 +68,9 @@ The Go app cannot scan a QR code without camera code, and typing an
 80-character string is not acceptable. The phone opens a 60 s pairing window
 and the Mac reads the pairing record over an encrypted (bonded) link. User
 presence is required on both sides (button + bonding confirmation). The
-service UUID is fixed; the Mac remembers the peripheral identifier.
+service UUID is fixed. The Mac does not pin a peripheral identifier: it
+connects to whichever phone advertises the service (add pinning if two phones
+running the app ever meet).
 See `protocol/PROTOCOL.md`.
 
 ## D4. Small things
