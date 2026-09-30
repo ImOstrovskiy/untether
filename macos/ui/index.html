@@ -15,6 +15,7 @@
     --faint: #5d616b;
     --accent: #3ddc97;
     --accent-soft: rgba(61, 220, 151, 0.16);
+    --blue: #4da3ff;
     --warn: #ffcc4d;
     --warn-soft: rgba(255, 204, 77, 0.16);
     --danger: #ff6b6b;
@@ -32,6 +33,7 @@
       --faint: #a2a7b1;
       --accent: #12a86b;
       --accent-soft: rgba(18, 168, 107, 0.14);
+      --blue: #0a84ff;
       --warn: #b7791f;
       --warn-soft: rgba(245, 173, 34, 0.18);
       --danger: #d64545;
@@ -116,7 +118,7 @@
   .meter .track { flex: 1; height: 6px; border-radius: 3px; background: var(--tile); overflow: hidden; }
   .meter .fill { height: 100%; width: 100%; border-radius: 3px; background: var(--accent); transform-origin: left; transition: transform .4s ease; }
   .meter .val { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  svg.spark { width: 100%; height: 30px; display: block; margin: 4px 0 6px; }
+  svg.spark { width: 100%; height: 34px; display: block; margin: 4px 0 6px; }
 
   .btn { border: none; border-radius: 9px; padding: 7px 11px; font: inherit; font-weight: 600; cursor: pointer;
     background: var(--tile); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
@@ -195,12 +197,12 @@ const T = {
     devices: "Devices on the hotspot", none: "No devices yet", block: "Block", unblockAll: "Unblock all ({0})", blocked: "{0} blocked",
     general: "General", login: "Launch at login", autoOff: "Turn off on sleep or when leaving it", autoOffHint: "Needs Location permission",
     phoneSection: "Phone", pair: "Pair with phone…", pairHint: "Tap Pair Mac on the phone first", forget: "Forget phone",
-    selfTest: "Security self-test", selfTestHint: "Replay and wrong-key commands must be refused", run: "Run",
+   
     quit: "Quit", shizukuDown: "Shizuku is not running on the phone", shizukuPerm: "Shizuku has no permission on the phone",
     shizukuHint: "Start it there, then try again.", guard: "Phone battery below {0}%", guardHint: "Battery guard keeps the hotspot off.",
     hot: "Phone is hot ({0} °C)", hotHint: "Hotspot and 5G heat it up; give it some air.",
     findTitle: "Your phone is looking for this Mac", findText: "Here it is!", stop: "Stop",
-    turningOn: "Turning on…", turningOff: "Turning off…", pairWait: "On the phone: Untether → Pair Mac", selfTestOk: "Self-test passed: replayed and wrongly signed commands were refused", notConnected: "The phone is not connected",
+    turningOn: "Turning on…", turningOff: "Turning off…", pairWait: "On the phone: Untether → Pair Mac", notConnected: "The phone is not connected",
     charging: "charging",
   },
   uk: {
@@ -214,12 +216,12 @@ const T = {
     devices: "Пристрої на точці доступу", none: "Поки немає пристроїв", block: "Заблокувати", unblockAll: "Розблокувати всі ({0})", blocked: "{0} заблоковано",
     general: "Загальне", login: "Запускати при вході", autoOff: "Вимикати при сні або виході з мережі", autoOffHint: "Потрібен доступ до геолокації",
     phoneSection: "Телефон", pair: "Сполучити з телефоном…", pairHint: "Спершу натисніть «Під'єднати Mac» на телефоні", forget: "Забути телефон",
-    selfTest: "Перевірка безпеки", selfTestHint: "Повтор і чужий ключ мають відхилятися", run: "Запустити",
+   
     quit: "Вийти", shizukuDown: "На телефоні не запущено Shizuku", shizukuPerm: "Shizuku не має дозволу на телефоні",
     shizukuHint: "Запустіть його там і спробуйте ще раз.", guard: "Заряд телефона нижче {0}%", guardHint: "Захист батареї не дає увімкнути точку доступу.",
     hot: "Телефон гарячий ({0} °C)", hotHint: "Точка доступу й 5G гріють телефон — дайте йому охолонути.",
     findTitle: "Телефон шукає цей Mac", findText: "Я тут!", stop: "Зупинити",
-    turningOn: "Вмикаю…", turningOff: "Вимикаю…", pairWait: "На телефоні: Untether → «Під'єднати Mac»", selfTestOk: "Перевірку пройдено: повтор і чужий ключ відхилено", notConnected: "Телефон не підключено",
+    turningOn: "Вмикаю…", turningOff: "Вимикаю…", pairWait: "На телефоні: Untether → «Під'єднати Mac»", notConnected: "Телефон не підключено",
     charging: "заряджається",
   },
 };
@@ -243,13 +245,20 @@ function tr(s) { return typeof s === "string" && s.startsWith("@") ? t(s.slice(1
 function icon(name, cls = "i") { return `<svg class="${cls}" viewBox="0 -960 960 960"><path d="${ICONS[name] || ""}"/></svg>`; }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
+let sparkId = 0;
+// Line with a vertical gradient fill under it, like Vorssaint's usage graphs.
 function spark(values, lo, hi, color) {
   if (values.length < 2) return `<svg class="spark"></svg>`;
-  const w = 300, h = 30, n = values.length;
-  const pts = values.map((v, i) => [i * w / (n - 1), h - 2 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * (h - 4)]);
+  const w = 300, h = 34, n = values.length, id = `g${++sparkId}`;
+  const pts = values.map((v, i) => [i * w / (n - 1), h - 2 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * (h - 6)]);
   const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:${color};stop-opacity:.45"/>
+      <stop offset="1" style="stop-color:${color};stop-opacity:0"/>
+    </linearGradient></defs>
+    <path d="${line} L${w} ${h} L0 ${h} Z" fill="url(#${id})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 // Called by Go with the full UI state.
@@ -318,7 +327,7 @@ function tabBtn(id, ic, title) { return `<button class="${tab === id ? "active" 
 
 function alerts(p) {
   let a = "";
-  if (S.note) a += `<div class="alert ${S.noteOk ? "ok" : "bad"}">${icon(S.noteOk ? "check_circle" : "error")}<div class="grow">${esc(tr(S.note))}</div>
+  if (S.note) a += `<div class="alert bad">${icon("error")}<div class="grow">${esc(tr(S.note))}</div>
     <button class="x" onclick="send('dismiss')">${icon("close")}</button></div>`;
   if (!p) return a;
   if (p.shz !== 0) a += `<div class="alert bad">${icon("shield")}<div class="grow"><b>${t(p.shz === 2 ? "shizukuPerm" : "shizukuDown")}</b>${t("shizukuHint")}</div></div>`;
@@ -341,8 +350,8 @@ function overview(p) {
   <div class="card">
     <div class="meter"><span class="name">${t("battery")}</span><div class="track"><div class="fill" style="transform:scaleX(${(p.bat) / 100})"></div></div><span class="val">${p.bat}%${p.chg ? " ⚡" : ""}</span></div>
     ${spark(hist.bat, 0, 100, "var(--accent)")}
-    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
-    ${spark(hist.rsrp, -130, -70, "var(--muted)")}
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="background:var(--blue);transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    ${spark(hist.rsrp, -130, -70, "var(--blue)")}
   </div>
   <div class="actions">
     <button class="btn ${p.ring ? "danger" : ""}" onclick="send('ring')">${icon("notifications_active")}${t(p.ring ? "stopRing" : "ring")}</button>
@@ -368,7 +377,7 @@ function network(p) {
   </div>
   <h2>${t("quality")}</h2>
   <div class="card">
-    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="background:var(--blue);transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
     <div class="meter"><span class="name">SINR</span><div class="track"><div class="fill" style="transform:scaleX(${(snrPct) / 100})"></div></div><span class="val">${p.snr != null ? p.snr + " dB" : "—"}</span></div>
     <div class="meter" style="padding-bottom:10px"><span class="name">${t("signal")}</span><div class="track"><div class="fill" style="transform:scaleX(${(p.sig * 25) / 100})"></div></div><span class="val">${p.sig}/4</span></div>
   </div>
@@ -404,8 +413,6 @@ function settings() {
   <div class="card">
     <div class="row">${icon("add_link")}<div class="grow"><div class="label">${t("pair")}</div><div class="hint">${t("pairHint")}</div></div>
       <button class="btn accent" onclick="send('pair')">${icon("bluetooth")}</button></div>
-    <div class="row">${icon("verified_user")}<div class="grow"><div class="label">${t("selfTest")}</div><div class="hint">${t("selfTestHint")}</div></div>
-      <button class="btn" ${S.phone ? "" : "disabled"} onclick="send('selfTest')">${t("run")}</button></div>
     <div class="row">${icon("link_off")}<div class="grow"><div class="label">${t("forget")}</div></div>
       <button class="btn danger" ${S.paired ? "" : "disabled"} onclick="send('forget')">${icon("close")}</button></div>
   </div>`;

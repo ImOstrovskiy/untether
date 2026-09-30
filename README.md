@@ -66,8 +66,7 @@ Wi-Fi scan.
   Connections with numeric comparison).
 - Commands carry `HMAC-SHA256(secret, op ‖ nonce ‖ arg)` over a one-time nonce
   from the phone: without the 32-byte secret nothing can be switched, and a
-  recorded command cannot be replayed. **Settings → Security self-test** checks
-  this on the live link.
+  recorded command cannot be replayed.
 - The secret and hotspot password are generated on the phone, kept encrypted
   with an Android Keystore key, handed to the Mac only inside a 60 s pairing
   window the user opens, and stored in the macOS Keychain.

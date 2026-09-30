@@ -34,7 +34,6 @@ type app struct {
 	onHotspot bool   // the Mac has been seen on the hotspot's Wi-Fi since it was turned on
 
 	lang     string  // UI language: en, uk
-	noteOk   bool    // the note is good news (self-test passed)
 	joinTook float64 // seconds from click to joined, last time
 	finding  bool    // the phone asked this Mac to play a sound
 	lastIcon int     // status item icon currently shown (-1 = none yet)
@@ -122,19 +121,6 @@ func (a *app) blockMAC(s string) {
 	}
 	a.send(opBlock, mac, "")
 	slog.Info("blocked client", "mac", s)
-}
-
-func (a *app) selfTest() {
-	creds := a.getCreds()
-	if creds == nil {
-		a.setNote("Not paired")
-		return
-	}
-	if err := a.phone.SelfTest(creds.Key); err != nil {
-		a.setNote("Self-test FAILED: " + err.Error())
-		return
-	}
-	a.setNoteOK("@selfTestOk")
 }
 
 func (a *app) turnOn(creds *Pairing) {
@@ -318,14 +304,7 @@ func (a *app) setNote(s string) {
 		slog.Warn(s)
 	}
 	a.mu.Lock()
-	a.note, a.noteOk = s, false
-	a.mu.Unlock()
-	a.render()
-}
-
-func (a *app) setNoteOK(s string) {
-	a.mu.Lock()
-	a.note, a.noteOk = s, true
+	a.note = s
 	a.mu.Unlock()
 	a.render()
 }

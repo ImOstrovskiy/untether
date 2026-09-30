@@ -95,7 +95,6 @@ type uiState struct {
 	Paired   bool    `json:"paired"`
 	Busy     string  `json:"busy"`
 	Note     string  `json:"note"`
-	NoteOk   bool    `json:"noteOk"`
 	JoinTook float64 `json:"joinTook,omitempty"`
 	Settings struct {
 		Login   bool `json:"login"`
@@ -110,7 +109,7 @@ func (a *app) render() {
 	a.mu.Lock()
 	st := uiState{
 		Lang: a.lang, Version: version, Paired: a.creds != nil, Busy: a.busy,
-		Note: a.note, NoteOk: a.noteOk, JoinTook: a.joinTook, Phone: a.state,
+		Note: a.note, JoinTook: a.joinTook, Phone: a.state,
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
 	icon := iconFor(a.state, a.busy)
@@ -184,8 +183,6 @@ func (a *app) handleAction(action, arg string) {
 		a.render()
 	case "pair":
 		a.pair()
-	case "selfTest":
-		a.selfTest()
 	case "forget":
 		if err := forgetPairing(); err != nil {
 			a.setNote("Keychain: " + err.Error())
