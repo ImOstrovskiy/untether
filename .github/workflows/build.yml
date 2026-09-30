@@ -1,0 +1,130 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev.$GITHUB_RUN_NUMBER"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.2 build-tools;37.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "No keystore secret: the APK stays unsigned."; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "UNTETHER_KEYSTORE=$RUNNER_TEMP/release.jks"
+            echo "UNTETHER_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "UNTETHER_KEY_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "UNTETHER_KEY_ALIAS=$KEY_ALIAS"
+          } >> "$GITHUB_ENV"
+
+      - name: Test and build
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease -PversionName="$VERSION" -PversionCode="$GITHUB_RUN_NUMBER"
+
+      - name: Collect
+        run: |
+          mkdir -p out
+          apk=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$apk" "out/Untether-$VERSION.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*.apk
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev.$GITHUB_RUN_NUMBER"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: macos/go.mod
+          cache-dependency-path: macos/go.sum
+
+      # A stable self-signed identity keeps the app's Bluetooth permission and Keychain access across updates.
+      - name: Signing identity
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERT_P12_B64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_B64" ]; then echo "SIGN_ID=-" >> "$GITHUB_ENV"; echo "No certificate secret: ad-hoc signing."; exit 0; fi
+          kc="$RUNNER_TEMP/build.keychain-db"; kcpass=$(openssl rand -hex 16)
+          echo "$CERT_B64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "SIGN_ID=Untether Release" >> "$GITHUB_ENV"
+
+      - name: Test and build
+        working-directory: macos
+        run: |
+          make test
+          make dmg VERSION="$VERSION" SIGN_ID="$SIGN_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: macos/dist/*.dmg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/$GITHUB_REF_NAME.md"
+          if [ -f "$notes" ]; then flags=(--notes-file "$notes"); else flags=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" out/* --title "Untether ${GITHUB_REF_NAME#v}" "${flags[@]}"
