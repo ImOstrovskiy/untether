@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,9 +37,10 @@ type app struct {
 	note      string // last problem, shown in the menu
 	onHotspot bool   // the Mac has been seen on the hotspot's Wi-Fi since it was turned on
 
-	mHotspot, mPhone, mClients, mShizuku, mNote, mToggle *systray.MenuItem
-	mPair, mForget, mLogin, mAutoOff, mQuit            *systray.MenuItem
-	mClientList                                        []*systray.MenuItem
+	mHotspot, mPhone, mRadio, mClients, mUnblock, mShizuku, mNote *systray.MenuItem
+	mToggle, mRing                                                *systray.MenuItem
+	mPair, mForget, mLogin, mAutoOff, mSelfTest, mQuit            *systray.MenuItem
+	mClientList, mClientBlock                                     []*systray.MenuItem
 }
 
 func main() {
@@ -62,23 +64,28 @@ func (a *app) onReady() {
 	a.mHotspot.Disable()
 	a.mPhone = systray.AddMenuItem("", "")
 	a.mPhone.Disable()
+	a.mRadio = systray.AddMenuItem("", "")
+	a.mRadio.Disable()
 	a.mClients = systray.AddMenuItem("", "")
 	for range maxClientItems {
 		item := a.mClients.AddSubMenuItem("", "")
-		item.Disable()
 		a.mClientList = append(a.mClientList, item)
+		a.mClientBlock = append(a.mClientBlock, item.AddSubMenuItem("Block This Device", "Disconnect it and keep it off the hotspot"))
 	}
+	a.mUnblock = a.mClients.AddSubMenuItem("", "")
 	a.mShizuku = systray.AddMenuItem("", "")
 	a.mShizuku.Disable()
 	a.mNote = systray.AddMenuItem("", "Click to dismiss")
 	systray.AddSeparator()
 	a.mToggle = systray.AddMenuItem("Turn Hotspot On", "")
+	a.mRing = systray.AddMenuItem("Ring Phone", "Play an alarm on the phone for 20 s")
 	systray.AddSeparator()
 	settings := systray.AddMenuItem("Settings", "")
 	a.mPair = settings.AddSubMenuItem("Pair with Phone…", "Open Pixel Hotspot on the phone and tap Pair Mac first")
 	a.mForget = settings.AddSubMenuItem("Forget Phone", "")
 	a.mLogin = settings.AddSubMenuItemCheckbox("Launch at Login", "", launchAtLogin())
 	a.mAutoOff = settings.AddSubMenuItemCheckbox("Turn Hotspot Off on Sleep or When Leaving It", "Needs Location permission", a.cfg.AutoOff)
+	a.mSelfTest = settings.AddSubMenuItem("Run Security Self-Test", "Checks that the phone refuses replayed and wrongly signed commands")
 	a.mQuit = systray.AddMenuItem("Quit", "")
 	a.render()
 
@@ -101,10 +108,23 @@ func (a *app) onReady() {
 }
 
 func (a *app) clicks() {
+	for i, item := range a.mClientBlock {
+		go func() {
+			for range item.ClickedCh {
+				a.blockClient(i)
+			}
+		}()
+	}
 	for {
 		select {
 		case <-a.mToggle.ClickedCh:
 			go a.toggle()
+		case <-a.mRing.ClickedCh:
+			go a.send(opRing, nil, "")
+		case <-a.mUnblock.ClickedCh:
+			go a.send(opUnblockAll, nil, "")
+		case <-a.mSelfTest.ClickedCh:
+			go a.selfTest()
 		case <-a.mPair.ClickedCh:
 			go a.pair()
 		case <-a.mForget.ClickedCh:
@@ -153,9 +173,55 @@ func (a *app) toggle() {
 		a.setNote(shizukuText(st.Shz))
 	case st.HS == hsOn || st.HS == hsStarting:
 		a.turnOff(creds)
+	case st.batteryGuarded():
+		a.setNote(fmt.Sprintf("Phone battery is below %d%%: its battery guard refuses to start the hotspot", st.BatMin))
 	default:
 		a.turnOn(creds)
 	}
+}
+
+// send runs a command that needs no follow-up; note is shown on success when not empty.
+func (a *app) send(op byte, arg []byte, note string) {
+	creds := a.getCreds()
+	if creds == nil {
+		a.setNote("Not paired")
+		return
+	}
+	if err := a.phone.Command(op, creds.Key, arg); err != nil {
+		a.setNote(err.Error())
+		return
+	}
+	a.setNote(note)
+}
+
+func (a *app) blockClient(i int) {
+	a.mu.Lock()
+	st := a.state
+	a.mu.Unlock()
+	if st == nil || i >= len(st.Clients) {
+		return
+	}
+	c := st.Clients[i]
+	mac, err := net.ParseMAC(c.MAC)
+	if err != nil || len(mac) != 6 {
+		a.setNote("Bad client address " + c.MAC)
+		return
+	}
+	a.send(opBlock, mac, "")
+	slog.Info("blocked client", "mac", c.MAC, "name", c.Name)
+}
+
+func (a *app) selfTest() {
+	creds := a.getCreds()
+	if creds == nil {
+		a.setNote("Not paired")
+		return
+	}
+	if err := a.phone.SelfTest(creds.Key); err != nil {
+		a.setNote("Self-test FAILED: " + err.Error())
+		return
+	}
+	a.setNote("Self-test passed: replayed and wrongly signed commands were refused")
 }
 
 func (a *app) turnOn(creds *Pairing) {
@@ -346,7 +412,32 @@ func (a *app) render() {
 		bars := strings.Repeat("●", min(max(st.Sig, 0), 4)) + strings.Repeat("○", 4-min(max(st.Sig, 0), 4))
 		return fmt.Sprintf("Phone: %d%%%s · %s · %s", st.Bat, charging, pick(netNames, st.Net), bars)
 	})
-	show(a.mClients, st != nil && st.NCL > 0, func() string { return fmt.Sprintf("Clients: %d", st.NCL) })
+	show(a.mRadio, st != nil && (st.Operator != "" || st.RSRP != nil), func() string {
+		parts := []string{}
+		if st.Operator != "" {
+			parts = append(parts, st.Operator)
+		}
+		if st.RSRP != nil {
+			parts = append(parts, fmt.Sprintf("%d dBm", *st.RSRP))
+		}
+		if st.SNR != nil {
+			parts = append(parts, fmt.Sprintf("SINR %d dB", *st.SNR))
+		}
+		return strings.Join(parts, " · ")
+	})
+	show(a.mClients, st != nil && (st.NCL > 0 || st.Blocked > 0), func() string {
+		if st.Blocked > 0 {
+			return fmt.Sprintf("Clients: %d · %d blocked", st.NCL, st.Blocked)
+		}
+		return fmt.Sprintf("Clients: %d", st.NCL)
+	})
+	show(a.mUnblock, st != nil && st.Blocked > 0, func() string { return fmt.Sprintf("Unblock All (%d)", st.Blocked) })
+	show(a.mRing, st != nil && creds != nil, func() string {
+		if st.Ringing {
+			return "Stop Ringing"
+		}
+		return "Ring Phone"
+	})
 	for i, item := range a.mClientList {
 		show(item, st != nil && i < len(st.Clients), func() string {
 			c := st.Clients[i]
