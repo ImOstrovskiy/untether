@@ -226,8 +226,9 @@ class ShizukuHotspotController(
             ?: SoftApConfiguration.Builder()
         b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray()))
             .setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
-            // One AP, 5 GHz preferred; the default would be 2.4 GHz only.
-            .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_2GHZ or SoftApConfiguration.BAND_5GHZ, 0) })
+            // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
+            // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
+            .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
         // Hidden setters. The default since Android 13 is a new random BSSID every session, which makes
         // macOS treat each session as a new network and scan for it; persistent keeps it per SSID.
         b.call("setMacRandomizationSetting", RANDOMIZATION_PERSISTENT)
