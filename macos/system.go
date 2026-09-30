@@ -2,13 +2,18 @@ package main
 
 /*
 #cgo CFLAGS: -fobjc-arc
-#cgo LDFLAGS: -framework CoreWLAN -framework CoreLocation -framework IOKit -framework Foundation
+#cgo LDFLAGS: -framework CoreWLAN -framework CoreLocation -framework IOKit -framework Foundation -framework Carbon
+#include <stdint.h>
 #include <stdlib.h>
 void phtRequestLocation(void);
 char *phtCurrentSSID(void);
-char *phtJoin(const char *ssid, const char *pass);
+int phtWiFiPowerOn(void);
+char *phtJoin(const char *ssid, const char *pass, int *scanned);
 void phtLeave(void);
+int phtWiFiBytes(uint64_t *in, uint64_t *out);
 void phtObserveSleep(void);
+void phtObserveURLs(void);
+void phtSetHotKey(int on);
 */
 import "C"
 
@@ -33,28 +38,72 @@ func currentSSID() string {
 	return C.GoString(s)
 }
 
-func joinWiFi(ssid, pass string) error {
+func wifiPowerOn() bool { return C.phtWiFiPowerOn() != 0 }
+
+// joinWiFi reports whether it had to scan (the cached network from the last join did not work).
+func joinWiFi(ssid, pass string) (scanned bool, err error) {
 	cs, cp := C.CString(ssid), C.CString(pass)
 	defer C.free(unsafe.Pointer(cs))
 	defer C.free(unsafe.Pointer(cp))
-	if e := C.phtJoin(cs, cp); e != nil {
+	var sc C.int
+	if e := C.phtJoin(cs, cp, &sc); e != nil {
 		defer C.free(unsafe.Pointer(e))
-		return errors.New(C.GoString(e))
+		return sc != 0, errors.New(C.GoString(e))
 	}
-	return nil
+	return sc != 0, nil
 }
 
 func leaveWiFi() { C.phtLeave() }
 
-var onWillSleep = func() {}
+// wifiBytes returns the Wi-Fi interface's total received and sent bytes.
+func wifiBytes() (in, out uint64, ok bool) {
+	var ci, co C.uint64_t
+	if C.phtWiFiBytes(&ci, &co) != 0 {
+		return 0, 0, false
+	}
+	return uint64(ci), uint64(co), true
+}
+
+var (
+	onWillSleep = func() {}
+	onURL       = func(string) {}
+	onHotKey    = func() {}
+)
 
 func observeSleep(f func()) {
 	onWillSleep = f
 	C.phtObserveSleep()
 }
 
+// observeURLs must run before the app finishes launching to catch the URL that launched it.
+func observeURLs(f func(string)) {
+	onURL = f
+	C.phtObserveURLs()
+}
+
+// setHotKey registers or removes the global shortcut ⌃⌥⌘H.
+func setHotKey(on bool, f func()) {
+	onHotKey = f
+	v := C.int(0)
+	if on {
+		v = 1
+	}
+	C.phtSetHotKey(v)
+}
+
+// The exported callbacks run on macOS threads; keep them short.
+
 //export goWillSleep
 func goWillSleep() { onWillSleep() }
+
+//export goOpenURL
+func goOpenURL(url *C.char) {
+	u := C.GoString(url)
+	go onURL(u)
+}
+
+//export goHotKey
+func goHotKey() { go onHotKey() }
 
 // Launch at login through a LaunchAgent (SMAppService needs an Objective-C/Swift host app).
 

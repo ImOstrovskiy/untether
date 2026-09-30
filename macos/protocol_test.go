@@ -33,8 +33,12 @@ func TestSignMatchesGolden(t *testing.T) {
 	for i := range nonce {
 		nonce[i] = byte(0xa0 + i)
 	}
-	if got, want := sign(key, opOn, nonce), golden(t, "command_on.hex"); !bytes.Equal(got, want) {
+	if got, want := sign(key, opOn, nonce, nil), golden(t, "command_on.hex"); !bytes.Equal(got, want) {
 		t.Fatalf("sign = %x, want %x", got, want)
+	}
+	mac := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	if got, want := sign(key, opBlock, nonce, mac), golden(t, "command_block.hex"); !bytes.Equal(got, want) {
+		t.Fatalf("sign block = %x, want %x", got, want)
 	}
 }
 

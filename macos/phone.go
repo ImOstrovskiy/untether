@@ -250,19 +250,57 @@ func (p *Phone) refresh() {
 }
 
 // Command reads a fresh nonce and writes a signed command.
-func (p *Phone) Command(op byte, key []byte) error {
+func (p *Phone) Command(op byte, key, arg []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.chars == nil {
 		return errNotConnected
 	}
-	nonce := make([]byte, 64)
-	n, err := p.chars[nonceUUID].Read(nonce)
-	if err != nil || n != 16 {
-		return fmt.Errorf("read nonce: n=%d err=%v", n, err)
+	nonce, err := p.readNonce()
+	if err != nil {
+		return err
 	}
-	if _, err := p.chars[commandUUID].Write(sign(key, op, nonce[:16])); err != nil {
-		return fmt.Errorf("phone rejected the command (pair again?): %w", err)
+	if _, err := p.chars[commandUUID].Write(sign(key, op, nonce, arg)); err != nil {
+		return fmt.Errorf("phone rejected the command: %w", err)
+	}
+	return nil
+}
+
+// readNonce needs p.mu held.
+func (p *Phone) readNonce() ([]byte, error) {
+	buf := make([]byte, 64)
+	n, err := p.chars[nonceUUID].Read(buf)
+	if err != nil || n != 16 {
+		return nil, fmt.Errorf("read nonce: n=%d err=%v", n, err)
+	}
+	return buf[:16], nil
+}
+
+// SelfTest checks on the live link that the phone accepts a fresh command and refuses a replayed
+// one and one signed with the wrong key. It only sends STATUS, which changes nothing.
+func (p *Phone) SelfTest(key []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.chars == nil {
+		return errNotConnected
+	}
+	cmd := p.chars[commandUUID]
+	nonce, err := p.readNonce()
+	if err != nil {
+		return err
+	}
+	frame := sign(key, opStatus, nonce, nil)
+	if _, err := cmd.Write(frame); err != nil {
+		return fmt.Errorf("fresh command refused: %w", err)
+	}
+	if _, err := cmd.Write(frame); err == nil {
+		return errors.New("replayed command was ACCEPTED")
+	}
+	if nonce, err = p.readNonce(); err != nil {
+		return err
+	}
+	if _, err := cmd.Write(sign(make([]byte, 32), opStatus, nonce, nil)); err == nil {
+		return errors.New("command with a wrong key was ACCEPTED")
 	}
 	return nil
 }

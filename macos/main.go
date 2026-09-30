@@ -162,7 +162,7 @@ func (a *app) turnOn(creds *Pairing) {
 	a.setBusy("Turning On…")
 	defer a.setBusy("")
 	start := time.Now()
-	if err := a.phone.Command(opOn, creds.Key); err != nil {
+	if err := a.phone.Command(opOn, creds.Key, nil); err != nil {
 		a.setNote(err.Error())
 		return
 	}
@@ -177,7 +177,7 @@ func (a *app) turnOn(creds *Pairing) {
 			err = nil
 			break
 		}
-		if err = joinWiFi(creds.SSID, creds.Pass); err == nil {
+		if _, err = joinWiFi(creds.SSID, creds.Pass); err == nil {
 			break
 		}
 		time.Sleep(time.Second)
@@ -192,7 +192,7 @@ func (a *app) turnOn(creds *Pairing) {
 func (a *app) turnOff(creds *Pairing) {
 	a.setBusy("Turning Off…")
 	defer a.setBusy("")
-	if err := a.phone.Command(opOff, creds.Key); err != nil {
+	if err := a.phone.Command(opOff, creds.Key, nil); err != nil {
 		a.setNote(err.Error())
 		return
 	}
@@ -260,7 +260,7 @@ func (a *app) onWillSleep() {
 	a.mu.Unlock()
 	if use && st != nil && creds != nil && st.HS == hsOn {
 		slog.Info("sleep: turning hotspot off")
-		if err := a.phone.Command(opOff, creds.Key); err != nil {
+		if err := a.phone.Command(opOff, creds.Key, nil); err != nil {
 			slog.Warn("sleep: off failed", "err", err)
 		}
 	}

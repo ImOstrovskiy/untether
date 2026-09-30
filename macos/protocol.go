@@ -17,9 +17,12 @@ var (
 )
 
 const (
-	opOn     byte = 0x01
-	opOff    byte = 0x02
-	opStatus byte = 0x03
+	opOn         byte = 0x01
+	opOff        byte = 0x02
+	opStatus     byte = 0x03
+	opRing       byte = 0x04
+	opBlock      byte = 0x05 // arg: client MAC, 6 bytes
+	opUnblockAll byte = 0x06
 )
 
 // Hotspot states (State.HS).
@@ -62,7 +65,17 @@ type State struct {
 	Net     int      `cbor:"net"`
 	Sig     int      `cbor:"sig"`
 	Shz     int      `cbor:"shz"`
+	// Optional, sent only when set.
+	Operator string `cbor:"op,omitempty"`
+	RSRP     *int   `cbor:"rsrp,omitempty"`
+	SNR      *int   `cbor:"snr,omitempty"`
+	Blocked  int    `cbor:"blk,omitempty"`
+	BatMin   int    `cbor:"bmin,omitempty"`
+	Ringing  bool   `cbor:"ring,omitempty"`
 }
+
+// batteryGuarded reports whether the phone will refuse to start the hotspot.
+func (s *State) batteryGuarded() bool { return s.BatMin > 0 && !s.Chg && s.Bat < s.BatMin }
 
 // Pairing is the value of the `pairing` characteristic, kept in the Keychain.
 type Pairing struct {
@@ -71,9 +84,9 @@ type Pairing struct {
 	Pass string `cbor:"p" json:"p"`
 }
 
-// sign builds a command frame: op ‖ nonce ‖ HMAC-SHA256(key, op ‖ nonce).
-func sign(key []byte, op byte, nonce []byte) []byte {
-	msg := append([]byte{op}, nonce...)
+// sign builds a command frame: op ‖ nonce ‖ arg ‖ HMAC-SHA256(key, op ‖ nonce ‖ arg).
+func sign(key []byte, op byte, nonce, arg []byte) []byte {
+	msg := append(append([]byte{op}, nonce...), arg...)
 	m := hmac.New(sha256.New, key)
 	m.Write(msg)
 	return m.Sum(msg)
