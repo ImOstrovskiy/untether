@@ -59,8 +59,8 @@
   header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--tile); }
   .logo svg { width: 22px; height: 22px; }
-  header .title { font-weight: 650; font-size: 14px; }
-  header .sub { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+  header .title { font-weight: 650; font-size: 13px; }
+  header .sub { color: var(--muted); font-size: 10.5px; display: flex; align-items: center; gap: 6px; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .dot.on { background: var(--accent); }
 
@@ -76,11 +76,11 @@
   .power.busy::after { content: ""; position: absolute; inset: -6px; border-radius: 50%;
     border: 2px solid var(--accent); border-top-color: transparent; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .hero .state { font-size: 17px; font-weight: 650; }
-  .hero .detail { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .hero .state { font-size: 20.5px; font-weight: 650; }
+  .hero .detail { color: var(--muted); margin-top: 2px; }
 
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px;
-    font-size: 11px; font-weight: 600; background: var(--tile); color: var(--muted); white-space: nowrap; }
+    font-size: 10.5px; font-weight: 600; background: var(--tile); color: var(--muted); white-space: nowrap; }
   .pill.ok { background: var(--accent-soft); color: var(--accent); }
   .pill.warn { background: var(--warn-soft); color: var(--warn); }
   .pill.bad { background: var(--danger-soft); color: var(--danger); }
@@ -99,25 +99,25 @@
   .row + .row { border-top: 1px solid var(--card-border); }
   .row .grow { flex: 1; min-width: 0; }
   .row .label { font-weight: 550; }
-  .row .hint { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .hint { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row > svg.i { color: var(--muted); }
 
   .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .tile { background: var(--tile); border-radius: 11px; padding: 9px 10px; text-align: left; }
-  .tile .k { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 4px; }
+  .tile .k { color: var(--muted); font-size: 10.5px; display: flex; align-items: center; gap: 4px; }
   .tile .k svg { width: 13px; height: 13px; }
-  .tile .v { font-size: 18px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-  .tile .v small { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .tile .v { font-size: 20.5px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 10.5px; font-weight: 600; color: var(--muted); margin-left: 2px; }
   .tile.hot .v { color: var(--danger); }
   .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; margin-left: 6px; vertical-align: 1px; }
   .bars i { width: 3px; border-radius: 1px; background: var(--faint); }
   .bars i.on { background: var(--text); }
 
   .meter { display: flex; align-items: center; gap: 10px; padding: 8px 0 2px; }
-  .meter .name { width: 64px; color: var(--muted); font-size: 12px; }
+  .meter .name { width: 64px; color: var(--muted); font-size: 10.5px; }
   .meter .track { flex: 1; height: 6px; border-radius: 3px; background: var(--tile); overflow: hidden; }
-  .meter .fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .4s ease; }
-  .meter .val { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
+  .meter .fill { height: 100%; width: 100%; border-radius: 3px; background: var(--accent); transform-origin: left; transition: transform .4s ease; }
+  .meter .val { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   svg.spark { width: 100%; height: 30px; display: block; margin: 4px 0 6px; }
 
   .btn { border: none; border-radius: 9px; padding: 7px 11px; font: inherit; font-weight: 600; cursor: pointer;
@@ -140,7 +140,7 @@
   .switch.on { background: var(--accent); }
   .switch.on::after { transform: translateX(14px); }
 
-  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; font-size: 12px; }
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; }
   .alert.warn { background: var(--warn-soft); color: var(--warn); }
   .alert.bad { background: var(--danger-soft); color: var(--danger); }
   .alert.ok { background: var(--accent-soft); color: var(--accent); }
@@ -149,8 +149,8 @@
   .alert .x { background: none; border: none; color: inherit; cursor: pointer; padding: 0; opacity: .7; }
 
   .empty { color: var(--muted); text-align: center; padding: 18px 0; }
-  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--faint); font-size: 11px; }
-  footer .btn { font-size: 11.5px; padding: 5px 9px; }
+  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--faint); font-size: 10.5px; }
+  footer .btn { font-size: 10.5px; padding: 5px 9px; }
 
   #find { position: fixed; inset: 0; display: none; place-items: center; background: rgba(10, 10, 14, 0.82); backdrop-filter: blur(6px); z-index: 10; }
   #find.show { display: grid; }
@@ -160,10 +160,10 @@
   @media (prefers-reduced-motion: reduce) { #find .ring, .power.busy::after { animation: none; } }
   #find .ring svg { width: 44px; height: 44px; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-  #find h3 { margin: 0 0 4px; font-size: 16px; color: #fff; }
+  #find h3 { margin: 0 0 4px; font-size: 16.5px; color: #fff; }
   #find p { margin: 0 0 14px; color: #c9ccd3; }
 
-  #demo { margin-top: 18px; color: #c9ccd3; font-size: 12px; display: none; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 340px; }
+  #demo { margin-top: 18px; color: #c9ccd3; display: none; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 340px; }
   body.demo #demo { display: flex; }
   #demo button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: #e7e8ec; border-radius: 8px; padding: 5px 9px; cursor: pointer; font: inherit; }
 </style>
@@ -341,9 +341,9 @@ function overview(p) {
   </div>
   <h2>${t("history")}</h2>
   <div class="card">
-    <div class="meter"><span class="name">${t("battery")}</span><div class="track"><div class="fill" style="width:${p.bat}%"></div></div><span class="val">${p.bat}%${p.chg ? " ⚡" : ""}</span></div>
+    <div class="meter"><span class="name">${t("battery")}</span><div class="track"><div class="fill" style="transform:scaleX(${(p.bat) / 100})"></div></div><span class="val">${p.bat}%${p.chg ? " ⚡" : ""}</span></div>
     ${spark(hist.bat, 0, 100, "var(--accent)")}
-    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="width:${rsrpPct(p.rsrp)}%"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
     ${spark(hist.rsrp, -130, -70, "var(--muted)")}
   </div>
   <div class="actions">
@@ -370,9 +370,9 @@ function network(p) {
   </div>
   <h2>${t("quality")}</h2>
   <div class="card">
-    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="width:${rsrpPct(p.rsrp)}%"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
-    <div class="meter"><span class="name">SINR</span><div class="track"><div class="fill" style="width:${snrPct}%"></div></div><span class="val">${p.snr != null ? p.snr + " dB" : "—"}</span></div>
-    <div class="meter" style="padding-bottom:10px"><span class="name">${t("signal")}</span><div class="track"><div class="fill" style="width:${p.sig * 25}%"></div></div><span class="val">${p.sig}/4</span></div>
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="transform:scaleX(${(rsrpPct(p.rsrp)) / 100})"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    <div class="meter"><span class="name">SINR</span><div class="track"><div class="fill" style="transform:scaleX(${(snrPct) / 100})"></div></div><span class="val">${p.snr != null ? p.snr + " dB" : "—"}</span></div>
+    <div class="meter" style="padding-bottom:10px"><span class="name">${t("signal")}</span><div class="track"><div class="fill" style="transform:scaleX(${(p.sig * 25) / 100})"></div></div><span class="val">${p.sig}/4</span></div>
   </div>
   <div class="actions" style="grid-template-columns:1fr">
     <button class="btn" ${p.shz === 0 ? "" : "disabled"} onclick="send('reconnectData')">${icon("sync")}${t("reconnect")}</button>
