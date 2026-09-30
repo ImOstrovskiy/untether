@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360">
+  <g transform="translate(552 20) scale(8)" fill="none" stroke="#12A86B" stroke-width="2" stroke-linecap="round">
+    <path d="M16 3.5 V13.5 A5 5 0 0 1 6 13.5 V12.5"/>
+    <circle cx="6" cy="7.6" r="1.9" fill="#12A86B" stroke="none"/>
+  </g>
+  <text x="640" y="268" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="96" font-weight="700" letter-spacing="-2" fill="#1B1D22">Untether</text>
+  <text x="640" y="318" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#616672">Your Android phone’s hotspot, one click away in the Mac menu bar</text>
+</svg>

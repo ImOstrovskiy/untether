@@ -144,7 +144,8 @@ class ShizukuHotspotController(
     private fun onApState(s: Int) = _state.update { cur ->
         when (s) {
             AP_ENABLING -> HotspotState(Hotspot.STARTING)
-            AP_ENABLED -> HotspotState(Hotspot.ON, ssid = tetheredSsid)
+            // The tethering callback does not always carry the config; the system config is ours anyway.
+            AP_ENABLED -> HotspotState(Hotspot.ON, ssid = tetheredSsid ?: ssid.takeIf { configSynced })
             AP_DISABLING -> HotspotState(Hotspot.STOPPING)
             // A failed start goes FAILED -> DISABLED; keep the error visible until the next command.
             AP_DISABLED -> if (cur.hotspot == Hotspot.ERROR) cur else HotspotState()
@@ -256,7 +257,7 @@ class ShizukuHotspotController(
                 val wifi = ifaces.filterIsInstance<TetheringInterface>()
                     .firstOrNull { it.type == TetheringManager.TETHERING_WIFI }
                 tetheredSsid = wifi?.softApConfiguration?.wifiSsid?.bytes?.decodeToString()
-                _state.update { if (it.hotspot == Hotspot.ON) it.copy(ssid = tetheredSsid) else it }
+                _state.update { if (it.hotspot == Hotspot.ON) it.copy(ssid = tetheredSsid ?: it.ssid) else it }
             }
             null
         }

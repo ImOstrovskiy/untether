@@ -165,6 +165,9 @@
 
   #demo { margin-top: 18px; color: #c9ccd3; display: none; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 340px; }
   body.demo #demo { display: flex; }
+  /* ?shot: just the popover on a transparent page, for README screenshots */
+  body.demo.shot { display: block; background: #00ff00; padding: 0; min-height: 0; } /* chroma key, cut out afterwards */
+  body.demo.shot #demo { display: none; }
   #demo button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: #e7e8ec; border-radius: 8px; padding: 5px 9px; cursor: pointer; font: inherit; }
 </style>
 <script src="icons.js"></script>
@@ -423,12 +426,12 @@ function demoState(kind) {
   const base = {
     lang: (navigator.language || "en").slice(0, 2), version: "0.2.0", paired: true, phoneName: "Pixel 9", busy: "", note: "",
     joinTook: 4.2, settings: { login: true, autoOff: false },
-    phone: { hs: 0, ssid: "Pixel-B4E3", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
-      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "!WORK!" }], dsim: 24, blk: 0, bmin: 10 },
+    phone: { hs: 0, ssid: "Untether-4F2A", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
+      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, blk: 0, bmin: 10 },
   };
   const p = base.phone;
   if (kind === "starting") { p.hs = 1; base.busy = ""; }
-  if (kind === "on") { p.hs = 2; p.cl = [{ mac: "12:f0:24:31:be:db", ip: "172.16.48.240", n: "Mac" }, { mac: "aa:bb:cc:dd:ee:ff", ip: "172.16.48.12", n: "iPad" }]; p.ncl = 2; p.blk = 1; }
+  if (kind === "on") { p.hs = 2; p.cl = [{ mac: "3a:9f:61:0c:d2:47", ip: "10.72.14.23", n: "MacBook-Air" }, { mac: "5e:21:b8:77:40:1a", ip: "10.72.14.61", n: "iPad" }]; p.ncl = 2; p.blk = 1; }
   if (kind === "shizuku") { p.shz = 1; }
   if (kind === "find") { p.fmac = true; }
   if (kind === "unpaired") { base.paired = false; base.phone = null; }
@@ -452,8 +455,13 @@ if (bridge) {
   bridge.postMessage({ action: "ready", arg: "" });
 } else {
   document.body.classList.add("demo");
+  // Demo URL options: ?state=on|off|starting|shizuku|find|unpaired &tab=overview|network|devices|settings &lang=en|uk &shot
+  const q = new URLSearchParams(location.search);
+  if (q.has("shot")) document.body.classList.add("shot");
+  if (q.get("tab")) tab = q.get("tab");
+  demoKind = q.get("state") || demoKind;
   for (let i = 0; i < 60; i++) { hist.bat.push(62 + i * 0.28 + Math.sin(i / 5) * 1.5); hist.rsrp.push(-108 + Math.sin(i / 4) * 6 + Math.cos(i / 9) * 4); }
-  render(demoState(demoKind));
+  render(Object.assign(demoState(demoKind), q.get("lang") ? { lang: q.get("lang") } : {}));
 }
 </script>
 </body>
