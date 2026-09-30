@@ -1,0 +1,71 @@
+package io.github.imostrovskiy.pixelhotspot
+
+import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** HMAC secret + hotspot credentials. Generated once, kept encrypted with an Android Keystore key. */
+class Pairing(val secret: ByteArray, val ssid: String, val pass: String) {
+    /** Value of the `pairing` characteristic. */
+    fun encode(): ByteArray = Cbor.encode(linkedMapOf("k" to secret, "s" to ssid, "p" to pass))
+
+    companion object {
+        private const val ALIAS = "pairing"
+
+        fun load(ctx: Context): Pairing {
+            val prefs = ctx.getSharedPreferences("pairing", Context.MODE_PRIVATE)
+            runCatching {
+                val iv = Base64.decode(prefs.getString("iv", null) ?: return@runCatching null, 0)
+                val ct = Base64.decode(prefs.getString("ct", null)!!, 0)
+                val plain = cipher(Cipher.DECRYPT_MODE, GCMParameterSpec(128, iv)).doFinal(ct)
+                val (ssid, pass) = String(plain, 32, plain.size - 32).split("\n")
+                Pairing(plain.copyOf(32), ssid, pass)
+            }.onFailure { AppLog.log("Stored pairing unreadable, generating a new one: $it") }
+                .getOrNull()?.let { return it }
+
+            val p = generate()
+            val c = cipher(Cipher.ENCRYPT_MODE, null)
+            val ct = c.doFinal(p.secret + "${p.ssid}\n${p.pass}".toByteArray())
+            prefs.edit()
+                .putString("iv", Base64.encodeToString(c.iv, Base64.NO_WRAP))
+                .putString("ct", Base64.encodeToString(ct, Base64.NO_WRAP))
+                .apply()
+            AppLog.log("New pairing generated, SSID ${p.ssid}")
+            return p
+        }
+
+        private fun generate(): Pairing {
+            val rng = SecureRandom()
+            val abc = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+            return Pairing(
+                ByteArray(32).also(rng::nextBytes),
+                "Pixel-%04X".format(rng.nextInt(0x10000)),
+                String(CharArray(16) { abc[rng.nextInt(abc.length)] }),
+            )
+        }
+
+        private fun cipher(mode: Int, spec: GCMParameterSpec?): Cipher =
+            Cipher.getInstance("AES/GCM/NoPadding").apply { init(mode, key(), spec) }
+
+        private fun key(): SecretKey {
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+            return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
+                init(
+                    KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .build(),
+                )
+                generateKey()
+            }
+        }
+    }
+}
