@@ -23,6 +23,9 @@ const (
 	opRing       byte = 0x04
 	opBlock      byte = 0x05 // arg: client MAC, 6 bytes
 	opUnblockAll byte = 0x06
+	opSetDataSim byte = 0x07 // arg: subscription id, int32 big-endian
+	opReconnect  byte = 0x08 // mobile data off and on
+	opStopFind   byte = 0x09 // stop the phone's find-my-Mac request
 )
 
 // Hotspot states (State.HS).
@@ -47,31 +50,40 @@ var (
 )
 
 type Client struct {
-	MAC  string `cbor:"mac"`
-	IP   string `cbor:"ip,omitempty"`
-	Name string `cbor:"n,omitempty"`
+	MAC  string `cbor:"mac" json:"mac"`
+	IP   string `cbor:"ip,omitempty" json:"ip,omitempty"`
+	Name string `cbor:"n,omitempty" json:"n,omitempty"`
 }
 
 // State is the value of the `state` characteristic. Field order matches the phone's encoder.
 type State struct {
-	V       int      `cbor:"v"`
-	HS      int      `cbor:"hs"`
-	Err     *int     `cbor:"err,omitempty"`
-	SSID    string   `cbor:"ssid,omitempty"`
-	Clients []Client `cbor:"cl"`
-	NCL     int      `cbor:"ncl"`
-	Bat     int      `cbor:"bat"`
-	Chg     bool     `cbor:"chg"`
-	Net     int      `cbor:"net"`
-	Sig     int      `cbor:"sig"`
-	Shz     int      `cbor:"shz"`
+	V       int      `cbor:"v" json:"v"`
+	HS      int      `cbor:"hs" json:"hs"`
+	Err     *int     `cbor:"err,omitempty" json:"err,omitempty"`
+	SSID    string   `cbor:"ssid,omitempty" json:"ssid,omitempty"`
+	Clients []Client `cbor:"cl" json:"cl"`
+	NCL     int      `cbor:"ncl" json:"ncl"`
+	Bat     int      `cbor:"bat" json:"bat"`
+	Chg     bool     `cbor:"chg" json:"chg"`
+	Net     int      `cbor:"net" json:"net"`
+	Sig     int      `cbor:"sig" json:"sig"`
+	Shz     int      `cbor:"shz" json:"shz"`
 	// Optional, sent only when set.
-	Operator string `cbor:"op,omitempty"`
-	RSRP     *int   `cbor:"rsrp,omitempty"`
-	SNR      *int   `cbor:"snr,omitempty"`
-	Blocked  int    `cbor:"blk,omitempty"`
-	BatMin   int    `cbor:"bmin,omitempty"`
-	Ringing  bool   `cbor:"ring,omitempty"`
+	Operator string `cbor:"op,omitempty" json:"op,omitempty"`
+	RSRP     *int   `cbor:"rsrp,omitempty" json:"rsrp,omitempty"`
+	SNR      *int   `cbor:"snr,omitempty" json:"snr,omitempty"`
+	Blocked  int    `cbor:"blk,omitempty" json:"blk,omitempty"`
+	BatMin   int    `cbor:"bmin,omitempty" json:"bmin,omitempty"`
+	Ringing  bool   `cbor:"ring,omitempty" json:"ring,omitempty"`
+	Temp     *int   `cbor:"temp,omitempty" json:"temp,omitempty"`
+	Sims     []Sim  `cbor:"sims,omitempty" json:"sims,omitempty"`
+	DataSim  *int   `cbor:"dsim,omitempty" json:"dsim,omitempty"`
+	FindMac  bool   `cbor:"fmac,omitempty" json:"fmac,omitempty"`
+}
+
+type Sim struct {
+	ID   int    `cbor:"id" json:"id"`
+	Name string `cbor:"n" json:"n"`
 }
 
 // batteryGuarded reports whether the phone will refuse to start the hotspot.

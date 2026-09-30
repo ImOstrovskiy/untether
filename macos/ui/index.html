@@ -1,0 +1,455 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Hotspot</title>
+<style>
+  :root {
+    --bg: #17181c;
+    --card: rgba(255, 255, 255, 0.045);
+    --card-border: rgba(255, 255, 255, 0.07);
+    --tile: rgba(255, 255, 255, 0.06);
+    --text: #f2f3f5;
+    --muted: #9a9ea8;
+    --faint: #5d616b;
+    --accent: #3ddc97;
+    --accent-soft: rgba(61, 220, 151, 0.16);
+    --warn: #ffcc4d;
+    --warn-soft: rgba(255, 204, 77, 0.16);
+    --danger: #ff6b6b;
+    --danger-soft: rgba(255, 107, 107, 0.16);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f5f7;
+      --card: rgba(0, 0, 0, 0.035);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --tile: rgba(0, 0, 0, 0.045);
+      --text: #1b1d22;
+      --muted: #616672;
+      --faint: #a2a7b1;
+      --accent: #12a86b;
+      --accent-soft: rgba(18, 168, 107, 0.14);
+      --warn: #b7791f;
+      --warn-soft: rgba(245, 173, 34, 0.18);
+      --danger: #d64545;
+      --danger-soft: rgba(214, 69, 69, 0.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+  body.in-app { background: transparent; }
+  body.demo { min-height: 100vh; display: grid; place-items: start center; padding: 40px 16px; background: #0e0f12; }
+  body.demo #app { border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; background: var(--bg); }
+
+  #app { width: 340px; padding: 14px 14px 10px; }
+  svg.i { width: 18px; height: 18px; fill: currentColor; flex: none; }
+
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--tile); }
+  .logo svg { width: 22px; height: 22px; }
+  header .title { font-weight: 650; font-size: 14px; }
+  header .sub { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .dot.on { background: var(--accent); }
+
+  /* Hero: the big hotspot button */
+  .hero { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--radius);
+    background: var(--card); border: 1px solid var(--card-border); margin-bottom: 12px; }
+  .power { width: 62px; height: 62px; border-radius: 50%; border: none; flex: none; display: grid; place-items: center;
+    color: var(--muted); background: var(--tile); transition: all .25s ease; cursor: pointer; position: relative; }
+  .power svg { width: 30px; height: 30px; }
+  .power:hover:not(:disabled) { transform: scale(1.04); }
+  .power:disabled { opacity: .45; cursor: default; }
+  .power.on { color: var(--bg); background: var(--accent); }
+  .power.busy::after { content: ""; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid var(--accent); border-top-color: transparent; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hero .state { font-size: 17px; font-weight: 650; }
+  .hero .detail { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; background: var(--tile); color: var(--muted); white-space: nowrap; }
+  .pill.ok { background: var(--accent-soft); color: var(--accent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: var(--danger-soft); color: var(--danger); }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.plain::before { display: none; }
+
+  nav { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-border); margin-bottom: 12px; }
+  nav button { flex: 1; height: 30px; border: none; border-radius: 8px; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+  nav button:hover { color: var(--text); }
+  nav button.active { background: var(--tile); color: var(--accent); }
+
+  h2 { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 2px 7px; font-weight: 650; }
+  h2:first-child { margin-top: 2px; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 4px 12px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 0; min-height: 40px; }
+  .row + .row { border-top: 1px solid var(--card-border); }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .label { font-weight: 550; }
+  .row .hint { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row > svg.i { color: var(--muted); }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile { background: var(--tile); border-radius: 11px; padding: 9px 10px; text-align: left; }
+  .tile .k { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 4px; }
+  .tile .k svg { width: 13px; height: 13px; }
+  .tile .v { font-size: 18px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .tile.hot .v { color: var(--danger); }
+  .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; margin-left: 6px; vertical-align: 1px; }
+  .bars i { width: 3px; border-radius: 1px; background: var(--faint); }
+  .bars i.on { background: var(--text); }
+
+  .meter { display: flex; align-items: center; gap: 10px; padding: 8px 0 2px; }
+  .meter .name { width: 64px; color: var(--muted); font-size: 12px; }
+  .meter .track { flex: 1; height: 6px; border-radius: 3px; background: var(--tile); overflow: hidden; }
+  .meter .fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .4s ease; }
+  .meter .val { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
+  svg.spark { width: 100%; height: 30px; display: block; margin: 4px 0 6px; }
+
+  .btn { border: none; border-radius: 9px; padding: 7px 11px; font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--tile); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.accent { background: var(--accent-soft); color: var(--accent); }
+  .btn.danger { background: var(--danger-soft); color: var(--danger); }
+  .btn.icon { padding: 6px; }
+  .btn svg.i { width: 16px; height: 16px; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .actions .btn { justify-content: center; padding: 9px; }
+
+  .seg { display: flex; background: var(--tile); border-radius: 9px; padding: 3px; gap: 3px; margin: 6px 0 8px; }
+  .seg button { flex: 1; border: none; background: none; color: var(--muted); font: inherit; font-weight: 600; padding: 5px; border-radius: 7px; cursor: pointer; }
+  .seg button.on { background: var(--bg); color: var(--text); }
+
+  .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--faint); position: relative; flex: none; cursor: pointer; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { transform: translateX(14px); }
+
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; font-size: 12px; }
+  .alert.warn { background: var(--warn-soft); color: var(--warn); }
+  .alert.bad { background: var(--danger-soft); color: var(--danger); }
+  .alert.ok { background: var(--accent-soft); color: var(--accent); }
+  .alert .grow { flex: 1; color: var(--text); }
+  .alert b { display: block; color: inherit; }
+  .alert .x { background: none; border: none; color: inherit; cursor: pointer; padding: 0; opacity: .7; }
+
+  .empty { color: var(--muted); text-align: center; padding: 18px 0; }
+  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--faint); font-size: 11px; }
+  footer .btn { font-size: 11.5px; padding: 5px 9px; }
+
+  #find { position: fixed; inset: 0; display: none; place-items: center; background: rgba(10, 10, 14, 0.82); backdrop-filter: blur(6px); z-index: 10; }
+  #find.show { display: grid; }
+  #find .box { text-align: center; padding: 20px; }
+  #find .ring { width: 90px; height: 90px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; color: var(--bg);
+    background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { #find .ring, .power.busy::after { animation: none; } }
+  #find .ring svg { width: 44px; height: 44px; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  #find h3 { margin: 0 0 4px; font-size: 16px; color: #fff; }
+  #find p { margin: 0 0 14px; color: #c9ccd3; }
+
+  #demo { margin-top: 18px; color: #c9ccd3; font-size: 12px; display: none; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 340px; }
+  body.demo #demo { display: flex; }
+  #demo button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: #e7e8ec; border-radius: 8px; padding: 5px 9px; cursor: pointer; font: inherit; }
+</style>
+<script src="icons.js"></script>
+</head>
+<body>
+<div>
+  <div id="app"></div>
+  <div id="demo">
+    <button onclick="demoSet('off')">Off</button>
+    <button onclick="demoSet('starting')">Starting</button>
+    <button onclick="demoSet('on')">On</button>
+    <button onclick="demoSet('shizuku')">Shizuku down</button>
+    <button onclick="demoSet('find')">Find Mac</button>
+    <button onclick="demoSet('unpaired')">Not paired</button>
+    <button onclick="demoLang()">Language</button>
+  </div>
+</div>
+<div id="find"></div>
+
+<script>
+const T = {
+  en: {
+    connected: "Connected", searching: "Looking for the phone…", notPaired: "Not paired",
+    hs: ["Off", "Starting…", "On", "Stopping…", "Error"],
+    tapOn: "Click to turn on", tapOff: "Click to turn off", joined: "Joined in {0} s", errCode: "Could not start (code {0})",
+    tabOverview: "Overview", tabNetwork: "Network", tabDevices: "Devices", tabSettings: "Settings",
+    battery: "Battery", temp: "Temp", signal: "Signal", phone: "Phone", history: "Last 30 min",
+    ring: "Ring phone", stopRing: "Stop ringing", reconnect: "Reconnect data",
+    mobile: "Mobile network", noNet: "No network", dataSim: "SIM for data", quality: "Signal quality",
+    devices: "Devices on the hotspot", none: "No devices yet", block: "Block", unblockAll: "Unblock all ({0})", blocked: "{0} blocked",
+    general: "General", login: "Launch at login", autoOff: "Turn off on sleep or when leaving it", autoOffHint: "Needs Location permission",
+    phoneSection: "Phone", pair: "Pair with phone…", pairHint: "Tap Pair Mac on the phone first", forget: "Forget phone",
+    selfTest: "Security self-test", selfTestHint: "Replay and wrong-key commands must be refused", run: "Run",
+    quit: "Quit", shizukuDown: "Shizuku is not running on the phone", shizukuPerm: "Shizuku has no permission on the phone",
+    shizukuHint: "Start it there, then try again.", guard: "Phone battery below {0}%", guardHint: "Battery guard keeps the hotspot off.",
+    hot: "Phone is hot ({0} °C)", hotHint: "Hotspot and 5G heat it up; give it some air.",
+    findTitle: "Your phone is looking for this Mac", findText: "Here it is!", stop: "Stop",
+    turningOn: "Turning on…", turningOff: "Turning off…", pairWait: "On the phone: Pixel Hotspot → Pair Mac", selfTestOk: "Self-test passed: replayed and wrongly signed commands were refused", notConnected: "The phone is not connected",
+    charging: "charging",
+  },
+  uk: {
+    connected: "Підключено", searching: "Шукаю телефон…", notPaired: "Не сполучено",
+    hs: ["Вимкнено", "Вмикається…", "Увімкнено", "Вимикається…", "Помилка"],
+    tapOn: "Клацніть, щоб увімкнути", tapOff: "Клацніть, щоб вимкнути", joined: "Під'єднано за {0} с", errCode: "Не вдалося увімкнути (код {0})",
+    tabOverview: "Огляд", tabNetwork: "Мережа", tabDevices: "Пристрої", tabSettings: "Налаштування",
+    battery: "Батарея", temp: "Темп.", signal: "Сигнал", phone: "Телефон", history: "Останні 30 хв",
+    ring: "Подзвонити", stopRing: "Зупинити дзвінок", reconnect: "Перепідключити дані",
+    mobile: "Мобільна мережа", noNet: "Немає мережі", dataSim: "SIM для даних", quality: "Якість сигналу",
+    devices: "Пристрої на точці доступу", none: "Поки немає пристроїв", block: "Заблокувати", unblockAll: "Розблокувати всі ({0})", blocked: "{0} заблоковано",
+    general: "Загальне", login: "Запускати при вході", autoOff: "Вимикати при сні або виході з мережі", autoOffHint: "Потрібен доступ до геолокації",
+    phoneSection: "Телефон", pair: "Сполучити з телефоном…", pairHint: "Спершу натисніть «Під'єднати Mac» на телефоні", forget: "Забути телефон",
+    selfTest: "Перевірка безпеки", selfTestHint: "Повтор і чужий ключ мають відхилятися", run: "Запустити",
+    quit: "Вийти", shizukuDown: "На телефоні не запущено Shizuku", shizukuPerm: "Shizuku не має дозволу на телефоні",
+    shizukuHint: "Запустіть його там і спробуйте ще раз.", guard: "Заряд телефона нижче {0}%", guardHint: "Захист батареї не дає увімкнути точку доступу.",
+    hot: "Телефон гарячий ({0} °C)", hotHint: "Точка доступу й 5G гріють телефон — дайте йому охолонути.",
+    findTitle: "Телефон шукає цей Mac", findText: "Я тут!", stop: "Зупинити",
+    turningOn: "Вмикаю…", turningOff: "Вимикаю…", pairWait: "На телефоні: Pixel Hotspot → «Під'єднати Mac»", selfTestOk: "Перевірку пройдено: повтор і чужий ключ відхилено", notConnected: "Телефон не підключено",
+    charging: "заряджається",
+  },
+};
+const NET = [null, "3G", "LTE", "5G NSA", "5G SA"];
+const HOT_C = 42;
+
+let S = null;          // last state from Go (or the demo)
+let tab = "overview";
+const hist = { bat: [], rsrp: [] };  // sparkline history, one point per state update (capped)
+
+const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.pht;
+function send(action, arg) { bridge ? bridge.postMessage({ action, arg: arg == null ? "" : String(arg) }) : demoAction(action, arg); }
+
+function t(key, ...args) {
+  const d = T[(S && S.lang) || "en"] || T.en;
+  let s = d[key] ?? T.en[key] ?? key;
+  args.forEach((a, i) => { s = s.replace(`{${i}}`, a); });
+  return s;
+}
+function tr(s) { return typeof s === "string" && s.startsWith("@") ? t(s.slice(1)) : s; }
+function icon(name, cls = "i") { return `<svg class="${cls}" viewBox="0 -960 960 960"><path d="${ICONS[name] || ""}"/></svg>`; }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+function spark(values, lo, hi, color) {
+  if (values.length < 2) return `<svg class="spark"></svg>`;
+  const w = 300, h = 30, n = values.length;
+  const pts = values.map((v, i) => [i * w / (n - 1), h - 2 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * (h - 4)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+// Called by Go with the full UI state.
+window.render = function (state) {
+  S = typeof state === "string" ? JSON.parse(state) : state;
+  const p = S.phone;
+  if (p) {
+    hist.bat.push(p.bat); if (hist.bat.length > 180) hist.bat.shift();
+    if (p.rsrp != null) { hist.rsrp.push(p.rsrp); if (hist.rsrp.length > 180) hist.rsrp.shift(); }
+  }
+  draw();
+};
+
+function draw() {
+  if (!S) return;
+  const p = S.phone;
+  const hs = p ? p.hs : 0;
+  const on = p && (hs === 2 || hs === 1);
+  const busy = !!S.busy || (p && (hs === 1 || hs === 3));
+  const status = !S.paired ? `<span class="pill plain">${t("notPaired")}</span>`
+    : p ? `<span class="dot on"></span>${esc(S.phoneName || "Pixel")} · ${t("connected")}`
+    : `<span class="dot"></span>${t("searching")}`;
+
+  let detail = tr(S.busy) || "";
+  if (!detail && p) {
+    if (hs === 4) detail = t("errCode", p.err ?? -1);
+    else if (hs === 2) detail = [p.ssid, S.joinTook ? t("joined", S.joinTook) : null].filter(Boolean).join(" · ");
+    else detail = t(on ? "tapOff" : "tapOn");
+  }
+  const canToggle = S.paired && p && p.shz === 0 && !S.busy;
+
+  let html = `
+  <header>
+    <div class="logo">${icon("wifi_tethering")}</div>
+    <div style="flex:1"><div class="title">Pixel Hotspot</div><div class="sub">${status}</div></div>
+  </header>
+  <section class="hero">
+    <button class="power ${on ? "on" : ""} ${busy ? "busy" : ""}" ${canToggle ? "" : "disabled"} onclick="send('toggle')" title="${t(on ? "tapOff" : "tapOn")}">
+      ${icon(on ? "wifi_tethering" : "power_settings_new")}</button>
+    <div style="min-width:0">
+      <div class="state">${p ? t("hs")[hs] : "—"}</div>
+      <div class="detail">${esc(detail)}</div>
+    </div>
+  </section>`;
+
+  html += alerts(p);
+  html += `<nav>
+    ${tabBtn("overview", "dashboard", t("tabOverview"))}
+    ${tabBtn("network", "cell_tower", t("tabNetwork"))}
+    ${tabBtn("devices", "devices", t("tabDevices"))}
+    ${tabBtn("settings", "settings", t("tabSettings"))}
+  </nav>`;
+  html += `<main>${({ overview, network, devices, settings })[tab](p)}</main>`;
+  html += `<footer><span>v${esc(S.version || "")}</span><button class="btn" onclick="send('quit')">${icon("logout")}${t("quit")}</button></footer>`;
+  document.getElementById("app").innerHTML = html;
+
+  const find = document.getElementById("find");
+  find.classList.toggle("show", !!(p && p.fmac));
+  if (bridge) requestAnimationFrame(() => bridge.postMessage({ action: "height", arg: String(document.getElementById("app").offsetHeight) }));
+  find.innerHTML = `<div class="box"><div class="ring">${icon("laptop_mac")}</div>
+    <h3>${t("findTitle")}</h3><p>${t("findText")}</p>
+    <button class="btn accent" onclick="send('stopFindMac')">${icon("close")}${t("stop")}</button></div>`;
+}
+
+function tabBtn(id, ic, title) { return `<button class="${tab === id ? "active" : ""}" title="${title}" onclick="tab='${id}';draw()">${icon(ic)}</button>`; }
+
+function alerts(p) {
+  let a = "";
+  if (S.note) a += `<div class="alert ${S.noteOk ? "ok" : "bad"}">${icon(S.noteOk ? "check_circle" : "error")}<div class="grow">${esc(tr(S.note))}</div>
+    <button class="x" onclick="send('dismiss')">${icon("close")}</button></div>`;
+  if (!p) return a;
+  if (p.shz !== 0) a += `<div class="alert bad">${icon("shield")}<div class="grow"><b>${t(p.shz === 2 ? "shizukuPerm" : "shizukuDown")}</b>${t("shizukuHint")}</div></div>`;
+  if (p.bmin > 0 && !p.chg && p.bat > 0 && p.bat < p.bmin) a += `<div class="alert warn">${icon("battery_full")}<div class="grow"><b>${t("guard", p.bmin)}</b>${t("guardHint")}</div></div>`;
+  if (p.temp >= HOT_C) a += `<div class="alert warn">${icon("thermostat")}<div class="grow"><b>${t("hot", p.temp)}</b>${t("hotHint")}</div></div>`;
+  return a;
+}
+
+function overview(p) {
+  if (!p) return `<div class="card"><div class="empty">${t(S.paired ? "searching" : "notPaired")}</div></div>`;
+  const bars = `<span class="bars">${[4, 7, 10, 12].map((h, i) => `<i class="${i < p.sig ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`;
+  return `
+  <h2>${t("phone")}</h2>
+  <div class="tiles">
+    <div class="tile"><div class="k">${icon(p.chg ? "battery_charging_full" : "battery_full")}${t("battery")}</div><div class="v">${p.bat}<small>%</small></div></div>
+    <div class="tile ${p.temp >= HOT_C ? "hot" : ""}"><div class="k">${icon("thermostat")}${t("temp")}</div><div class="v">${p.temp ?? "—"}<small>°C</small></div></div>
+    <div class="tile"><div class="k">${icon("signal_cellular_alt")}${t("signal")}</div><div class="v">${NET[p.net] || "—"}${bars}</div></div>
+  </div>
+  <h2>${t("history")}</h2>
+  <div class="card">
+    <div class="meter"><span class="name">${t("battery")}</span><div class="track"><div class="fill" style="width:${p.bat}%"></div></div><span class="val">${p.bat}%${p.chg ? " ⚡" : ""}</span></div>
+    ${spark(hist.bat, 0, 100, "var(--accent)")}
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="width:${rsrpPct(p.rsrp)}%"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    ${spark(hist.rsrp, -130, -70, "var(--muted)")}
+  </div>
+  <div class="actions">
+    <button class="btn ${p.ring ? "danger" : ""}" onclick="send('ring')">${icon("notifications_active")}${t(p.ring ? "stopRing" : "ring")}</button>
+    <button class="btn" ${p.shz === 0 ? "" : "disabled"} onclick="send('reconnectData')">${icon("sync")}${t("reconnect")}</button>
+  </div>`;
+}
+
+function rsrpPct(v) { return v == null ? 0 : Math.round(Math.min(100, Math.max(0, (v + 130) / 60 * 100))); }
+
+function network(p) {
+  if (!p) return overview(p);
+  const sims = p.sims || [];
+  const seg = sims.length > 1 ? `<div class="seg">${sims.map(s => `<button class="${s.id === p.dsim ? "on" : ""}" onclick="send('dataSim', ${s.id})">${esc(s.n)}</button>`).join("")}</div>` : "";
+  const snrPct = p.snr == null ? 0 : Math.round(Math.min(100, Math.max(0, (p.snr + 10) / 40 * 100)));
+  return `
+  <h2>${t("mobile")}</h2>
+  <div class="card">
+    <div class="row">${icon("cell_tower")}<div class="grow"><div class="label">${esc(p.op || t("noNet"))}</div><div class="hint">${t("mobile")}</div></div>
+      <span class="pill ${p.net >= 3 ? "ok" : p.net ? "plain" : "bad"}">${NET[p.net] || t("noNet")}</span></div>
+    <div class="row">${icon("sim_card")}<div class="grow"><div class="label">${t("dataSim")}</div>
+      <div class="hint">${esc((sims.find(s => s.id === p.dsim) || sims[0] || {}).n || "—")}</div></div></div>
+    ${seg ? `<div style="padding-bottom:6px">${seg}</div>` : ""}
+  </div>
+  <h2>${t("quality")}</h2>
+  <div class="card">
+    <div class="meter"><span class="name">RSRP</span><div class="track"><div class="fill" style="width:${rsrpPct(p.rsrp)}%"></div></div><span class="val">${p.rsrp != null ? p.rsrp + " dBm" : "—"}</span></div>
+    <div class="meter"><span class="name">SINR</span><div class="track"><div class="fill" style="width:${snrPct}%"></div></div><span class="val">${p.snr != null ? p.snr + " dB" : "—"}</span></div>
+    <div class="meter" style="padding-bottom:10px"><span class="name">${t("signal")}</span><div class="track"><div class="fill" style="width:${p.sig * 25}%"></div></div><span class="val">${p.sig}/4</span></div>
+  </div>
+  <div class="actions" style="grid-template-columns:1fr">
+    <button class="btn" ${p.shz === 0 ? "" : "disabled"} onclick="send('reconnectData')">${icon("sync")}${t("reconnect")}</button>
+  </div>`;
+}
+
+function devices(p) {
+  if (!p) return overview(p);
+  const cl = p.cl || [];
+  const rows = cl.length ? cl.map((c, i) => `
+    <div class="row">${icon("laptop_mac")}<div class="grow"><div class="label">${esc(c.n || c.mac)}</div><div class="hint">${esc([c.ip, c.n ? c.mac : null].filter(Boolean).join(" · "))}</div></div>
+      <button class="btn icon danger" title="${t("block")}" onclick="send('block', '${esc(c.mac)}')">${icon("block")}</button></div>`).join("")
+    : `<div class="empty">${t("none")}</div>`;
+  return `
+  <h2>${t("devices")} ${p.blk ? `<span class="pill warn" style="margin-left:6px">${t("blocked", p.blk)}</span>` : ""}</h2>
+  <div class="card">${rows}</div>
+  ${p.blk ? `<div class="actions" style="grid-template-columns:1fr"><button class="btn" onclick="send('unblockAll')">${icon("lock_open")}${t("unblockAll", p.blk)}</button></div>` : ""}`;
+}
+
+function settings() {
+  const st = S.settings || {};
+  return `
+  <h2>${t("general")}</h2>
+  <div class="card">
+    <div class="row">${icon("rocket_launch")}<div class="grow"><div class="label">${t("login")}</div></div>
+      <div class="switch ${st.login ? "on" : ""}" onclick="send('login')"></div></div>
+    <div class="row">${icon("bedtime")}<div class="grow"><div class="label">${t("autoOff")}</div><div class="hint">${t("autoOffHint")}</div></div>
+      <div class="switch ${st.autoOff ? "on" : ""}" onclick="send('autoOff')"></div></div>
+  </div>
+  <h2>${t("phoneSection")}</h2>
+  <div class="card">
+    <div class="row">${icon("add_link")}<div class="grow"><div class="label">${t("pair")}</div><div class="hint">${t("pairHint")}</div></div>
+      <button class="btn accent" onclick="send('pair')">${icon("bluetooth")}</button></div>
+    <div class="row">${icon("verified_user")}<div class="grow"><div class="label">${t("selfTest")}</div><div class="hint">${t("selfTestHint")}</div></div>
+      <button class="btn" ${S.phone ? "" : "disabled"} onclick="send('selfTest')">${t("run")}</button></div>
+    <div class="row">${icon("link_off")}<div class="grow"><div class="label">${t("forget")}</div></div>
+      <button class="btn danger" ${S.paired ? "" : "disabled"} onclick="send('forget')">${icon("close")}</button></div>
+  </div>`;
+}
+
+// --- demo mode (opened in a browser, no Go bridge) ---
+function demoState(kind) {
+  const base = {
+    lang: (navigator.language || "en").slice(0, 2), version: "0.2.0", paired: true, phoneName: "Pixel 9", busy: "", note: "",
+    joinTook: 4.2, settings: { login: true, autoOff: false },
+    phone: { hs: 0, ssid: "Pixel-B4E3", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
+      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "!WORK!" }], dsim: 24, blk: 0, bmin: 10 },
+  };
+  const p = base.phone;
+  if (kind === "starting") { p.hs = 1; base.busy = ""; }
+  if (kind === "on") { p.hs = 2; p.cl = [{ mac: "12:f0:24:31:be:db", ip: "172.16.48.240", n: "Mac" }, { mac: "aa:bb:cc:dd:ee:ff", ip: "172.16.48.12", n: "iPad" }]; p.ncl = 2; p.blk = 1; }
+  if (kind === "shizuku") { p.shz = 1; }
+  if (kind === "find") { p.fmac = true; }
+  if (kind === "unpaired") { base.paired = false; base.phone = null; }
+  return base;
+}
+let demoKind = "on";
+function demoSet(kind) { demoKind = kind; render(Object.assign(demoState(kind), { lang: S ? S.lang : undefined })); }
+function demoLang() { const order = ["en", "uk"]; S.lang = order[(order.indexOf(S.lang) + 1) % 2]; draw(); }
+function demoAction(action) {
+  const p = S.phone;
+  if (action === "toggle" && p) { p.hs = p.hs === 2 ? 0 : 2; }
+  if (action === "ring" && p) p.ring = !p.ring;
+  if (action === "stopFindMac" && p) p.fmac = false;
+  if (action === "login") S.settings.login = !S.settings.login;
+  if (action === "autoOff") S.settings.autoOff = !S.settings.autoOff;
+  draw();
+}
+
+if (bridge) {
+  document.body.classList.add("in-app");
+  bridge.postMessage({ action: "ready", arg: "" });
+} else {
+  document.body.classList.add("demo");
+  for (let i = 0; i < 60; i++) { hist.bat.push(62 + i * 0.28 + Math.sin(i / 5) * 1.5); hist.rsrp.push(-108 + Math.sin(i / 4) * 6 + Math.cos(i / 9) * 4); }
+  render(demoState(demoKind));
+}
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -21,9 +22,9 @@ var errNotConnected = errors.New("phone is not connected")
 // block, hence the goroutines in the notification handler.
 type Phone struct {
 	adapter *bluetooth.Adapter
-	creds   func() *Pairing        // current pairing, nil if none
-	paired  func(Pairing)          // store a new pairing
-	onState func(*State)           // nil = link lost
+	creds   func() *Pairing // current pairing, nil if none
+	paired  func(Pairing)   // store a new pairing
+	onState func(*State)    // nil = link lost
 	pairReq chan chan error
 
 	mu    sync.Mutex // GATT operations, chars and dev
@@ -33,7 +34,14 @@ type Phone struct {
 	linkMu sync.Mutex // addr and lost; taken on CoreBluetooth's queue, so never held across GATT calls
 	addr   bluetooth.Address
 	lost   chan struct{}
+
+	lastState atomic.Int64 // unix ms of the last state from the phone (it re-sends every 60 s)
 }
+
+const (
+	silenceLimit    = 150 * time.Second // no state for this long on a live link: reconnect
+	failuresToReset = 5                 // consecutive failed sessions before resetting the adapter
+)
 
 func NewPhone(adapter *bluetooth.Adapter, creds func() *Pairing, paired func(Pairing), onState func(*State)) *Phone {
 	p := &Phone{adapter: adapter, creds: creds, paired: paired, onState: onState, pairReq: make(chan chan error, 1)}
@@ -53,15 +61,42 @@ func NewPhone(adapter *bluetooth.Adapter, creds func() *Pairing, paired func(Pai
 
 // Run never returns.
 func (p *Phone) Run() {
+	go p.watchdog()
+	failures := 0
 	for {
 		var req chan error
 		if p.creds() == nil {
 			req = <-p.pairReq // nothing to connect to until the user pairs
 		}
+		start := time.Now()
 		err := p.session(req)
 		slog.Info("phone session ended", "err", err)
 		p.onState(nil)
+		// A session that lived a while was a good one; quick failures in a row point at a stuck stack.
+		if time.Since(start) > time.Minute {
+			failures = 0
+		} else if failures++; failures >= failuresToReset {
+			failures = 0
+			slog.Warn("watchdog: resetting the Bluetooth adapter")
+			if err := p.adapter.Reset(); err == nil {
+				err = p.adapter.Enable()
+				slog.Info("adapter re-enabled", "err", err)
+			}
+		}
 		time.Sleep(2 * time.Second)
+	}
+}
+
+// watchdog drops a link that stopped delivering state; Run then reconnects.
+func (p *Phone) watchdog() {
+	for range time.Tick(30 * time.Second) {
+		p.mu.Lock()
+		silent := p.dev != nil && time.Since(time.UnixMilli(p.lastState.Load())) > silenceLimit
+		if silent {
+			slog.Warn("watchdog: no state from the phone, reconnecting")
+			_ = p.dev.Disconnect()
+		}
+		p.mu.Unlock()
 	}
 }
 
@@ -108,6 +143,7 @@ func (p *Phone) session(req chan error) (err error) {
 	p.linkMu.Lock()
 	p.addr, p.lost = addr, lost
 	p.linkMu.Unlock()
+	p.lastState.Store(time.Now().UnixMilli()) // the watchdog's clock starts at connect
 	p.mu.Lock()
 	p.chars, p.dev = chars, &dev
 	p.mu.Unlock()
@@ -247,6 +283,7 @@ func (p *Phone) handleState(b []byte) {
 		slog.Warn("bad state", "err", err)
 		return
 	}
+	p.lastState.Store(time.Now().UnixMilli())
 	p.onState(&st)
 }
 

@@ -9,15 +9,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
-	"fyne.io/systray"
 	"tinygo.org/x/bluetooth"
 )
-
-const maxClientItems = 8
 
 type config struct {
 	AutoOff bool `json:"auto_off"` // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
@@ -37,10 +33,11 @@ type app struct {
 	note      string // last problem, shown in the menu
 	onHotspot bool   // the Mac has been seen on the hotspot's Wi-Fi since it was turned on
 
-	mHotspot, mPhone, mRadio, mClients, mUnblock, mShizuku, mNote *systray.MenuItem
-	mToggle, mRing                                                *systray.MenuItem
-	mPair, mForget, mLogin, mAutoOff, mSelfTest, mQuit            *systray.MenuItem
-	mClientList, mClientBlock                                     []*systray.MenuItem
+	lang     string  // UI language: en, uk
+	noteOk   bool    // the note is good news (self-test passed)
+	joinTook float64 // seconds from click to joined, last time
+	finding  bool    // the phone asked this Mac to play a sound
+	lastIcon int     // status item icon currently shown (-1 = none yet)
 }
 
 func main() {
@@ -55,41 +52,14 @@ func main() {
 	}
 	a.creds = creds
 	a.phone = NewPhone(bluetooth.DefaultAdapter, a.getCreds, a.onPaired, a.onState)
-	systray.Run(a.onReady, func() {})
+	a.lang = systemLanguage()
+	a.lastIcon = -1
+	runUI(a.start, a.handleAction)
 }
 
-func (a *app) onReady() {
-	systray.SetTooltip("Pixel Hotspot")
-	a.mHotspot = systray.AddMenuItem("", "")
-	a.mHotspot.Disable()
-	a.mPhone = systray.AddMenuItem("", "")
-	a.mPhone.Disable()
-	a.mRadio = systray.AddMenuItem("", "")
-	a.mRadio.Disable()
-	a.mClients = systray.AddMenuItem("", "")
-	for range maxClientItems {
-		item := a.mClients.AddSubMenuItem("", "")
-		a.mClientList = append(a.mClientList, item)
-		a.mClientBlock = append(a.mClientBlock, item.AddSubMenuItem("Block This Device", "Disconnect it and keep it off the hotspot"))
-	}
-	a.mUnblock = a.mClients.AddSubMenuItem("", "")
-	a.mShizuku = systray.AddMenuItem("", "")
-	a.mShizuku.Disable()
-	a.mNote = systray.AddMenuItem("", "Click to dismiss")
-	systray.AddSeparator()
-	a.mToggle = systray.AddMenuItem("Turn Hotspot On", "")
-	a.mRing = systray.AddMenuItem("Ring Phone", "Play an alarm on the phone for 20 s")
-	systray.AddSeparator()
-	settings := systray.AddMenuItem("Settings", "")
-	a.mPair = settings.AddSubMenuItem("Pair with Phone…", "Open Pixel Hotspot on the phone and tap Pair Mac first")
-	a.mForget = settings.AddSubMenuItem("Forget Phone", "")
-	a.mLogin = settings.AddSubMenuItemCheckbox("Launch at Login", "", launchAtLogin())
-	a.mAutoOff = settings.AddSubMenuItemCheckbox("Turn Hotspot Off on Sleep or When Leaving It", "Needs Location permission", a.cfg.AutoOff)
-	a.mSelfTest = settings.AddSubMenuItem("Run Security Self-Test", "Checks that the phone refuses replayed and wrongly signed commands")
-	a.mQuit = systray.AddMenuItem("Quit", "")
+// start runs once the status item exists.
+func (a *app) start() {
 	a.render()
-
-	go a.clicks()
 	go func() {
 		for {
 			err := bluetooth.DefaultAdapter.Enable()
@@ -107,56 +77,6 @@ func (a *app) onReady() {
 	go a.watchWiFi()
 }
 
-func (a *app) clicks() {
-	for i, item := range a.mClientBlock {
-		go func() {
-			for range item.ClickedCh {
-				a.blockClient(i)
-			}
-		}()
-	}
-	for {
-		select {
-		case <-a.mToggle.ClickedCh:
-			go a.toggle()
-		case <-a.mRing.ClickedCh:
-			go a.send(opRing, nil, "")
-		case <-a.mUnblock.ClickedCh:
-			go a.send(opUnblockAll, nil, "")
-		case <-a.mSelfTest.ClickedCh:
-			go a.selfTest()
-		case <-a.mPair.ClickedCh:
-			go a.pair()
-		case <-a.mForget.ClickedCh:
-			if err := forgetPairing(); err != nil {
-				a.setNote("Keychain: " + err.Error())
-			}
-			a.mu.Lock()
-			a.creds = nil
-			a.mu.Unlock()
-			a.render()
-		case <-a.mLogin.ClickedCh:
-			if err := setLaunchAtLogin(!launchAtLogin()); err != nil {
-				a.setNote("Launch at login: " + err.Error())
-			}
-			a.render()
-		case <-a.mAutoOff.ClickedCh:
-			a.mu.Lock()
-			a.cfg.AutoOff = !a.cfg.AutoOff
-			err := a.cfg.save()
-			a.mu.Unlock()
-			if err != nil {
-				a.setNote("Settings: " + err.Error())
-			}
-			a.render()
-		case <-a.mNote.ClickedCh:
-			a.setNote("")
-		case <-a.mQuit.ClickedCh:
-			systray.Quit()
-		}
-	}
-}
-
 // --- actions ---
 
 func (a *app) toggle() {
@@ -166,9 +86,9 @@ func (a *app) toggle() {
 	switch {
 	case busy != "":
 	case creds == nil:
-		a.setNote("Not paired")
+		a.setNote("@notPaired")
 	case st == nil:
-		a.setNote("Phone is not connected")
+		a.setNote("@notConnected")
 	case st.Shz != shzOK:
 		a.setNote(shizukuText(st.Shz))
 	case st.HS == hsOn || st.HS == hsStarting:
@@ -194,21 +114,14 @@ func (a *app) send(op byte, arg []byte, note string) {
 	a.setNote(note)
 }
 
-func (a *app) blockClient(i int) {
-	a.mu.Lock()
-	st := a.state
-	a.mu.Unlock()
-	if st == nil || i >= len(st.Clients) {
-		return
-	}
-	c := st.Clients[i]
-	mac, err := net.ParseMAC(c.MAC)
+func (a *app) blockMAC(s string) {
+	mac, err := net.ParseMAC(s)
 	if err != nil || len(mac) != 6 {
-		a.setNote("Bad client address " + c.MAC)
+		a.setNote("Bad client address " + s)
 		return
 	}
 	a.send(opBlock, mac, "")
-	slog.Info("blocked client", "mac", c.MAC, "name", c.Name)
+	slog.Info("blocked client", "mac", s)
 }
 
 func (a *app) selfTest() {
@@ -221,11 +134,11 @@ func (a *app) selfTest() {
 		a.setNote("Self-test FAILED: " + err.Error())
 		return
 	}
-	a.setNote("Self-test passed: replayed and wrongly signed commands were refused")
+	a.setNoteOK("@selfTestOk")
 }
 
 func (a *app) turnOn(creds *Pairing) {
-	a.setBusy("Turning On…")
+	a.setBusy("@turningOn")
 	defer a.setBusy("")
 	start := time.Now()
 	if err := a.phone.Command(opOn, creds.Key, nil); err != nil {
@@ -252,11 +165,16 @@ func (a *app) turnOn(creds *Pairing) {
 		a.setNote("Wi-Fi: " + err.Error())
 		return
 	}
-	slog.Info("hotspot on and joined", "took", time.Since(start).Round(100*time.Millisecond))
+	took := time.Since(start).Round(100 * time.Millisecond)
+	a.mu.Lock()
+	a.joinTook = took.Seconds()
+	a.mu.Unlock()
+	a.render()
+	slog.Info("hotspot on and joined", "took", took)
 }
 
 func (a *app) turnOff(creds *Pairing) {
-	a.setBusy("Turning Off…")
+	a.setBusy("@turningOff")
 	defer a.setBusy("")
 	if err := a.phone.Command(opOff, creds.Key, nil); err != nil {
 		a.setNote(err.Error())
@@ -293,7 +211,7 @@ func (a *app) waitFor(hs int, timeout time.Duration) error {
 }
 
 func (a *app) pair() {
-	a.setNote("On the phone: Pixel Hotspot → Pair Mac")
+	a.setNote("@pairWait")
 	if err := a.phone.Pair(); err != nil {
 		a.setNote(err.Error())
 		return
@@ -315,7 +233,16 @@ func (a *app) onPaired(p Pairing) {
 func (a *app) onState(st *State) {
 	a.mu.Lock()
 	a.state = st
+	find := st != nil && st.FindMac
+	changed := find != a.finding
+	a.finding = find
 	a.mu.Unlock()
+	if changed {
+		uiFindSound(find)
+		if find {
+			uiShow()
+		}
+	}
 	a.render()
 }
 
@@ -363,145 +290,11 @@ func (a *app) watchWiFi() {
 
 // --- UI ---
 
-func (a *app) render() {
-	a.renderMu.Lock()
-	defer a.renderMu.Unlock()
-	a.mu.Lock()
-	st, creds, busy, note, autoOff := a.state, a.creds, a.busy, a.note, a.cfg.AutoOff
-	a.mu.Unlock()
-	if a.mHotspot == nil {
-		return // menu not built yet
-	}
-
-	icon := iconDisconnected
-	if st != nil {
-		switch {
-		case busy != "" || st.HS == hsStarting || st.HS == hsStopping:
-			icon = iconBusy
-		case st.HS == hsError || st.Shz != shzOK:
-			icon = iconError
-		case st.HS == hsOn:
-			icon = iconOn
-		default:
-			icon = iconOff
-		}
-	}
-	systray.SetTemplateIcon(a.icons[icon], a.icons[icon])
-
-	switch {
-	case creds == nil:
-		a.mHotspot.SetTitle("Not paired: Settings → Pair with Phone…")
-	case st == nil:
-		a.mHotspot.SetTitle("Phone not connected")
-	default:
-		title := "Hotspot: " + pick(hotspotNames, st.HS)
-		if st.HS == hsOn && st.SSID != "" {
-			title += " · " + st.SSID
-		}
-		if st.HS == hsError && st.Err != nil {
-			title += fmt.Sprintf(" (code %d)", *st.Err)
-		}
-		a.mHotspot.SetTitle(title)
-	}
-
-	show(a.mPhone, st != nil, func() string {
-		charging := ""
-		if st.Chg {
-			charging = " ⚡"
-		}
-		bars := strings.Repeat("●", min(max(st.Sig, 0), 4)) + strings.Repeat("○", 4-min(max(st.Sig, 0), 4))
-		return fmt.Sprintf("Phone: %d%%%s · %s · %s", st.Bat, charging, pick(netNames, st.Net), bars)
-	})
-	show(a.mRadio, st != nil && (st.Operator != "" || st.RSRP != nil), func() string {
-		parts := []string{}
-		if st.Operator != "" {
-			parts = append(parts, st.Operator)
-		}
-		if st.RSRP != nil {
-			parts = append(parts, fmt.Sprintf("%d dBm", *st.RSRP))
-		}
-		if st.SNR != nil {
-			parts = append(parts, fmt.Sprintf("SINR %d dB", *st.SNR))
-		}
-		return strings.Join(parts, " · ")
-	})
-	show(a.mClients, st != nil && (st.NCL > 0 || st.Blocked > 0), func() string {
-		if st.Blocked > 0 {
-			return fmt.Sprintf("Clients: %d · %d blocked", st.NCL, st.Blocked)
-		}
-		return fmt.Sprintf("Clients: %d", st.NCL)
-	})
-	show(a.mUnblock, st != nil && st.Blocked > 0, func() string { return fmt.Sprintf("Unblock All (%d)", st.Blocked) })
-	show(a.mRing, st != nil && creds != nil, func() string {
-		if st.Ringing {
-			return "Stop Ringing"
-		}
-		return "Ring Phone"
-	})
-	for i, item := range a.mClientList {
-		show(item, st != nil && i < len(st.Clients), func() string {
-			c := st.Clients[i]
-			return strings.TrimSpace(fmt.Sprintf("%s %s", firstNonEmpty(c.Name, c.MAC), c.IP))
-		})
-	}
-	show(a.mShizuku, st != nil && st.Shz != shzOK, func() string { return shizukuText(st.Shz) })
-	show(a.mNote, note != "", func() string { return "⚠ " + note })
-
-	switch {
-	case busy != "":
-		a.mToggle.SetTitle(busy)
-		a.mToggle.Disable()
-	case st != nil && (st.HS == hsOn || st.HS == hsStarting):
-		a.mToggle.SetTitle("Turn Hotspot Off")
-		a.mToggle.Enable()
-	default:
-		a.mToggle.SetTitle("Turn Hotspot On")
-		if st != nil && creds != nil && st.Shz == shzOK {
-			a.mToggle.Enable()
-		} else {
-			a.mToggle.Disable()
-		}
-	}
-	if creds != nil {
-		a.mForget.Enable()
-	} else {
-		a.mForget.Disable()
-	}
-	check(a.mLogin, launchAtLogin())
-	check(a.mAutoOff, autoOff)
-}
-
 func shizukuText(shz int) string {
 	if shz == shzNoPermission {
-		return "⚠ Shizuku has no permission on the phone: open Pixel Hotspot there"
+		return "@shizukuPerm"
 	}
-	return "⚠ Shizuku is not running on the phone: start it there"
-}
-
-func show(item *systray.MenuItem, visible bool, title func() string) {
-	if !visible {
-		item.Hide()
-		return
-	}
-	item.SetTitle(title())
-	item.Show()
-}
-
-func check(item *systray.MenuItem, on bool) {
-	if on {
-		item.Check()
-	} else {
-		item.Uncheck()
-	}
-}
-
-func firstNonEmpty(s ...string) string {
-	for _, v := range s {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return "@shizukuDown"
 }
 
 func (a *app) getCreds() *Pairing {
@@ -525,7 +318,14 @@ func (a *app) setNote(s string) {
 		slog.Warn(s)
 	}
 	a.mu.Lock()
-	a.note = s
+	a.note, a.noteOk = s, false
+	a.mu.Unlock()
+	a.render()
+}
+
+func (a *app) setNoteOK(s string) {
+	a.mu.Lock()
+	a.note, a.noteOk = s, true
 	a.mu.Unlock()
 	a.render()
 }

@@ -3,7 +3,6 @@ module github.com/imostrovskiy/pixel-hotspot-toggle/macos
 go 1.26.3
 
 require (
-	fyne.io/systray v1.12.2
 	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/keybase/go-keychain v0.0.1
 	tinygo.org/x/bluetooth v0.16.0
