@@ -1,15 +1,26 @@
+VERSION ?= 0.2.0-dev
 APP := dist/Untether.app
-# Stable identity from scripts/make-signing-identity.sh if present, else ad-hoc.
-SIGN_ID := $(shell security find-identity -p codesigning 2>/dev/null | grep -q "Untether Dev" && echo "Untether Dev" || echo -)
+DMG := dist/Untether-$(VERSION).dmg
+# Stable identity if present (scripts/make-signing-identity.sh locally, "Untether Release" in CI), else ad-hoc.
+SIGN_ID ?= $(shell security find-identity -p codesigning 2>/dev/null | grep -q "Untether Dev" && echo "Untether Dev" || echo -)
 
-.PHONY: app test install clean
+.PHONY: app dmg test install clean
 
 app:
-	CGO_ENABLED=1 go build -o dist/untether .
+	CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(VERSION)" -o dist/untether .
 	rm -rf $(APP) && mkdir -p $(APP)/Contents/MacOS
 	cp Info.plist $(APP)/Contents/
+	plutil -replace CFBundleShortVersionString -string "$(VERSION)" $(APP)/Contents/Info.plist
 	cp dist/untether $(APP)/Contents/MacOS/
-	codesign --force --sign "$(SIGN_ID)" $(APP)
+	codesign --force --timestamp=none --sign "$(SIGN_ID)" $(APP)
+
+# Drag-to-install disk image: the app next to a link to /Applications.
+dmg: app
+	rm -rf dist/dmg && mkdir -p dist/dmg
+	cp -R $(APP) dist/dmg/ && ln -s /Applications dist/dmg/Applications
+	hdiutil create -quiet -volname Untether -srcfolder dist/dmg -ov -format UDZO $(DMG)
+	codesign --force --timestamp=none --sign "$(SIGN_ID)" $(DMG)
+	rm -rf dist/dmg
 
 test:
 	go test ./...

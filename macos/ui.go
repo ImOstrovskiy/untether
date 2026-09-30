@@ -31,7 +31,8 @@ var indexHTML string
 //go:embed ui/icons.js
 var iconsJS string
 
-const version = "0.2.0"
+// version is set at build time: go build -ldflags "-X main.version=1.2.3".
+var version = "dev"
 
 // Cocoa needs the main thread; keep the main goroutine on it.
 func init() { runtime.LockOSThread() }
