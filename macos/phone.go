@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +26,9 @@ type Phone struct {
 	onState func(*State)           // nil = link lost
 	pairReq chan chan error
 
-	mu    sync.Mutex // GATT operations and chars
+	mu    sync.Mutex // GATT operations, chars and dev
 	chars map[bluetooth.UUID]bluetooth.DeviceCharacteristic
+	dev   *bluetooth.Device
 
 	linkMu sync.Mutex // addr and lost; taken on CoreBluetooth's queue, so never held across GATT calls
 	addr   bluetooth.Address
@@ -107,14 +109,14 @@ func (p *Phone) session(req chan error) (err error) {
 	p.addr, p.lost = addr, lost
 	p.linkMu.Unlock()
 	p.mu.Lock()
-	p.chars = chars
+	p.chars, p.dev = chars, &dev
 	p.mu.Unlock()
 	defer func() {
 		p.linkMu.Lock()
 		p.lost = nil
 		p.linkMu.Unlock()
 		p.mu.Lock()
-		p.chars = nil
+		p.chars, p.dev = nil, nil
 		p.mu.Unlock()
 	}()
 	slog.Info("phone connected", "addr", addr.String())
@@ -219,9 +221,20 @@ func (p *Phone) read(ch bluetooth.DeviceCharacteristic) ([]byte, error) {
 	buf := make([]byte, 512)
 	n, err := ch.Read(buf)
 	if err != nil {
+		p.dropIfStale(err)
 		return nil, err
 	}
 	return buf[:min(n, len(buf))], nil
+}
+
+// dropIfStale disconnects after a GATT timeout. It happens when the phone app restarted while the
+// link stayed up: its GATT server is new, our characteristic handles are not, and nothing answers.
+// Reconnecting rediscovers the service. Needs p.mu held.
+func (p *Phone) dropIfStale(err error) {
+	if p.dev != nil && strings.Contains(err.Error(), "timeout") {
+		slog.Warn("GATT timeout, reconnecting", "err", err)
+		_ = p.dev.Disconnect()
+	}
 }
 
 func (p *Phone) handleState(b []byte) {
@@ -261,6 +274,7 @@ func (p *Phone) Command(op byte, key, arg []byte) error {
 		return err
 	}
 	if _, err := p.chars[commandUUID].Write(sign(key, op, nonce, arg)); err != nil {
+		p.dropIfStale(err)
 		return fmt.Errorf("phone rejected the command: %w", err)
 	}
 	return nil
@@ -270,6 +284,9 @@ func (p *Phone) Command(op byte, key, arg []byte) error {
 func (p *Phone) readNonce() ([]byte, error) {
 	buf := make([]byte, 64)
 	n, err := p.chars[nonceUUID].Read(buf)
+	if err != nil {
+		p.dropIfStale(err)
+	}
 	if err != nil || n != 16 {
 		return nil, fmt.Errorf("read nonce: n=%d err=%v", n, err)
 	}

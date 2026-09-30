@@ -81,9 +81,11 @@ char *phtJoin(const char *ssid, const char *pass, int *scanned) {
         NSString *name = [NSString stringWithUTF8String:ssid];
         NSString *password = [NSString stringWithUTF8String:pass];
         loadLastNetwork();
-        if (lastNetwork && [lastNetworkSSID isEqualToString:name] &&
-            [iface associateToNetwork:lastNetwork password:password error:&err]) {
-            return NULL;
+        if (lastNetwork && [lastNetworkSSID isEqualToString:name]) {
+            if ([iface associateToNetwork:lastNetwork password:password error:&err]) return NULL;
+            // Stale (e.g. the AP moved to another channel): forget it so retries go straight to a scan.
+            lastNetwork = nil;
+            [NSFileManager.defaultManager removeItemAtURL:networkFile() error:nil];
         }
         *scanned = 1;
         NSSet<CWNetwork *> *found = [iface scanForNetworksWithName:name error:&err];
