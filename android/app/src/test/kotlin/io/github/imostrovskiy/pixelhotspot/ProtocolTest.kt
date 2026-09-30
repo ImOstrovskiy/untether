@@ -11,16 +11,21 @@ class ProtocolTest {
     private val key = ByteArray(32) { it.toByte() }
     private val nonce = ByteArray(16) { (0xa0 + it).toByte() }
 
-    private fun frame(op: Int, n: ByteArray = nonce, k: ByteArray = key): ByteArray {
-        val signed = byteArrayOf(op.toByte()) + n
+    private fun frame(op: Int, n: ByteArray = nonce, k: ByteArray = key, arg: ByteArray = ByteArray(0)): ByteArray {
+        val signed = byteArrayOf(op.toByte()) + n + arg
         return signed + Protocol.hmac(k, signed)
     }
+    private val mac = byteArrayOf(0xaa.toByte(), 0xbb.toByte(), 0xcc.toByte(), 0xdd.toByte(), 0xee.toByte(), 0xff.toByte())
 
     private fun golden(name: String) = File("../../protocol/testdata/$name").readText().trim()
     private fun ByteArray.hex() = joinToString("") { "%02x".format(it) }
 
     @Test fun commandMatchesGolden() = assertEquals(golden("command_on.hex"), frame(Protocol.OP_ON).hex())
-    @Test fun acceptsValidFrame() = assertEquals(Protocol.OP_ON, Protocol.verify(frame(Protocol.OP_ON), nonce, key))
+    @Test fun blockMatchesGolden() = assertEquals(golden("command_block.hex"), frame(Protocol.OP_BLOCK, arg = mac).hex())
+    @Test fun acceptsValidFrame() = assertEquals(Protocol.OP_ON, Protocol.verify(frame(Protocol.OP_ON), nonce, key)?.op)
+    @Test fun parsesArgument() = assertEquals(mac.hex(), Protocol.verify(frame(Protocol.OP_BLOCK, arg = mac), nonce, key)?.arg?.hex())
+    @Test fun rejectsTamperedArg() = assertNull(Protocol.verify(frame(Protocol.OP_BLOCK, arg = mac).also { it[20] = 0 }, nonce, key))
+    @Test fun rejectsOversizedArg() = assertNull(Protocol.verify(frame(Protocol.OP_BLOCK, arg = ByteArray(65)), nonce, key))
     @Test fun rejectsStaleNonce() = assertNull(Protocol.verify(frame(1, n = ByteArray(16)), nonce, key))
     @Test fun rejectsWrongKey() = assertNull(Protocol.verify(frame(1, k = ByteArray(32)), nonce, key))
     @Test fun rejectsWrongLength() = assertNull(Protocol.verify(frame(1).copyOf(48), nonce, key))

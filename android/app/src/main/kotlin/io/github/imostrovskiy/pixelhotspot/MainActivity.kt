@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
@@ -31,6 +32,10 @@ class MainActivity : Activity() {
     private val scope = MainScope()
     private lateinit var status: TextView
     private lateinit var log: TextView
+    private lateinit var autoOff: Button
+    private lateinit var batteryMin: Button
+    private lateinit var unblock: Button
+    private lateinit var stopRing: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +52,10 @@ class MainActivity : Activity() {
             button("Pair Mac (60 s)") { HotspotService.start(this@MainActivity, HotspotService.ACTION_PAIR) }
             button("Hotspot ON") { HotspotService.start(this@MainActivity, HotspotService.ACTION_ON) }
             button("Hotspot OFF") { HotspotService.start(this@MainActivity, HotspotService.ACTION_OFF) }
+            autoOff = button("") { HotspotService.start(this@MainActivity, HotspotService.ACTION_CYCLE_AUTO_OFF) }
+            batteryMin = button("") { HotspotService.start(this@MainActivity, HotspotService.ACTION_CYCLE_BATTERY_MIN) }
+            unblock = button("") { HotspotService.start(this@MainActivity, HotspotService.ACTION_UNBLOCK_ALL) }
+            stopRing = button("Stop ringing") { HotspotService.start(this@MainActivity, HotspotService.ACTION_STOP_RING) }
             addView(log)
         }
         setContentView(ScrollView(this).apply {
@@ -60,8 +69,14 @@ class MainActivity : Activity() {
 
         if (hasRequired(this)) HotspotService.start(this) else requestPermissions(PERMISSIONS, 1)
         scope.launch {
-            combine(HotspotService.phone, HotspotService.pairingUntil, AppLog.lines) { p, pairUntil, lines ->
+            combine(HotspotService.phone, HotspotService.pairingUntil, HotspotService.settings, AppLog.lines) { p, pairUntil, s, lines ->
                 status.text = render(p, pairUntil)
+                autoOff.text = "Auto-off when idle: ${if (s.autoOffMinutes > 0) "${s.autoOffMinutes} min" else "never"}"
+                batteryMin.text = "Battery guard: ${if (s.batteryMin > 0) "below ${s.batteryMin}%" else "off"}"
+                val blocked = p?.extras?.blocked ?: 0
+                unblock.text = "Unblock all ($blocked)"
+                unblock.visibility = if (blocked > 0) View.VISIBLE else View.GONE
+                stopRing.visibility = if (p?.extras?.ringing == true) View.VISIBLE else View.GONE
                 log.text = lines.reversed().joinToString("\n")
             }.collect {}
         }
@@ -90,6 +105,8 @@ class MainActivity : Activity() {
             appendLine()
             p.clients.forEach { appendLine("  • ${it.name ?: it.mac} ${it.ip ?: ""}") }
             appendLine("Battery ${t.battery}%${if (t.charging) " charging" else ""} · $net · signal ${t.signal}/4")
+            val radio = listOfNotNull(t.operator, t.rsrp?.let { "$it dBm" }, t.snr?.let { "SINR $it dB" })
+            if (radio.isNotEmpty()) appendLine(radio.joinToString(" · "))
             appendLine("SSID ${pairing.ssid} · password ${pairing.pass}")
             if (secondsLeft > 0) appendLine("Pairing window open (${secondsLeft}s left when last updated)")
             if (!getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)) {
@@ -108,7 +125,7 @@ class MainActivity : Activity() {
     }
 
     private fun LinearLayout.button(label: String, onClick: () -> Unit) =
-        addView(Button(context).apply { text = label; setOnClickListener { onClick() } })
+        Button(context).apply { text = label; setOnClickListener { onClick() } }.also(::addView)
 
     companion object {
         val REQUIRED = arrayOf(BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT)

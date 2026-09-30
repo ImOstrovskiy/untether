@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.telephony.CellInfo
+import android.telephony.CellSignalStrengthLte
+import android.telephony.CellSignalStrengthNr
 import android.telephony.SignalStrength
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyDisplayInfo
@@ -13,7 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-/** Battery, cellular network type and signal level. */
+/** Battery, cellular network type, operator and signal. */
 class TelemetryMonitor(private val ctx: Context) {
     private val _telemetry = MutableStateFlow(Telemetry())
     val telemetry: StateFlow<Telemetry> = _telemetry
@@ -33,7 +36,18 @@ class TelemetryMonitor(private val ctx: Context) {
         TelephonyCallback.DisplayInfoListener,
         TelephonyCallback.SignalStrengthsListener {
         override fun onDisplayInfoChanged(d: TelephonyDisplayInfo) = _telemetry.update { it.copy(net = netCode(d)) }
-        override fun onSignalStrengthsChanged(s: SignalStrength) = _telemetry.update { it.copy(signal = s.level) }
+        override fun onSignalStrengthsChanged(s: SignalStrength) = _telemetry.update { t ->
+            // Prefer 5G numbers when the phone reports both (NSA).
+            val cells = s.cellSignalStrengths
+            val nr = cells.filterIsInstance<CellSignalStrengthNr>().firstOrNull()
+            val lte = cells.filterIsInstance<CellSignalStrengthLte>().firstOrNull()
+            t.copy(
+                signal = s.level,
+                operator = telephony.networkOperatorName.ifBlank { null },
+                rsrp = listOfNotNull(nr?.ssRsrp, lte?.rsrp).firstOrNull { it != CellInfo.UNAVAILABLE },
+                snr = listOfNotNull(nr?.ssSinr, lte?.rssnr).firstOrNull { it != CellInfo.UNAVAILABLE },
+            )
+        }
     }
 
     fun open() {

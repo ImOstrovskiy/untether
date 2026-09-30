@@ -28,15 +28,23 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.MacAddress
 import android.os.ParcelUuid
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
@@ -50,12 +58,20 @@ class HotspotService : Service() {
         const val ACTION_ON = "io.github.imostrovskiy.pixelhotspot.ON"
         const val ACTION_OFF = "io.github.imostrovskiy.pixelhotspot.OFF"
         const val ACTION_PAIR = "io.github.imostrovskiy.pixelhotspot.PAIR"
+        const val ACTION_CYCLE_AUTO_OFF = "io.github.imostrovskiy.pixelhotspot.CYCLE_AUTO_OFF"
+        const val ACTION_CYCLE_BATTERY_MIN = "io.github.imostrovskiy.pixelhotspot.CYCLE_BATTERY_MIN"
+        const val ACTION_UNBLOCK_ALL = "io.github.imostrovskiy.pixelhotspot.UNBLOCK_ALL"
+        const val ACTION_STOP_RING = "io.github.imostrovskiy.pixelhotspot.STOP_RING"
         private const val PAIRING_WINDOW_MS = 60_000L
+        private const val RING_MS = 20_000L
         private const val NOTIFICATION_ID = 1
+        private val AUTO_OFF_STEPS = listOf(10, 30, 60, 0) // minutes, 0 = never
+        private val BATTERY_MIN_STEPS = listOf(0, 10, 15, 20, 30) // %, 0 = off
 
         /** For the UI (same process). */
         val phone = MutableStateFlow<PhoneState?>(null)
         val pairingUntil = MutableStateFlow(0L)
+        val settings = MutableStateFlow(Settings())
         @Volatile var pairing: Pairing? = null
             private set
 
@@ -74,6 +90,11 @@ class HotspotService : Service() {
     private var gatt: BluetoothGattServer? = null
     @Volatile private var stateBytes = ByteArray(0)
     private var notificationText = ""
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
+    private val ringing = MutableStateFlow(false)
+    private var ringtone: Ringtone? = null
+    private var ringStop: Job? = null
+    private var batteryGuardFired = false
 
     // Per connected device (keyed by address).
     private val subscribers = ConcurrentHashMap<String, BluetoothDevice>()
@@ -91,11 +112,14 @@ class HotspotService : Service() {
         startForeground(NOTIFICATION_ID, notification("Starting…", shizukuLink = false),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         credentials = Pairing.load(this).also { pairing = it }
-        hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass).also { it.open() }
+        settings.value = Settings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0))
+        hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes)
+            .also { it.open() }
         telemetry = TelemetryMonitor(this).also { it.open() }
         registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         openGatt()
-        combine(hotspot.state, hotspot.clients, telemetry.telemetry, hotspot.shizuku, ::PhoneState)
+        val extras = combine(hotspot.blocked, settings, ringing) { b, s, r -> Extras(b, s.batteryMin, r) }
+        combine(hotspot.state, hotspot.clients, telemetry.telemetry, hotspot.shizuku, extras, ::PhoneState)
             .onEach(::publish)
             .launchIn(scope)
         AppLog.log("Service started")
@@ -109,11 +133,51 @@ class HotspotService : Service() {
                 pairingUntil.value = SystemClock.elapsedRealtime() + PAIRING_WINDOW_MS
                 AppLog.log("Pairing window open for 60 s")
             }
+            ACTION_CYCLE_AUTO_OFF -> updateSettings { it.copy(autoOffMinutes = next(AUTO_OFF_STEPS, it.autoOffMinutes)) }
+            ACTION_CYCLE_BATTERY_MIN -> updateSettings { it.copy(batteryMin = next(BATTERY_MIN_STEPS, it.batteryMin)) }
+            ACTION_UNBLOCK_ALL -> hotspot.unblockAll()
+            ACTION_STOP_RING -> ring(false)
         }
         return START_STICKY
     }
 
+    private fun next(steps: List<Int>, cur: Int) = steps[(steps.indexOf(cur) + 1) % steps.size]
+
+    private fun updateSettings(change: (Settings) -> Settings) {
+        val s = change(settings.value)
+        settings.value = s
+        prefs.edit().putInt("auto_off", s.autoOffMinutes).putInt("battery_min", s.batteryMin).apply()
+        hotspot.autoOffMinutes = s.autoOffMinutes
+        AppLog.log("Settings: auto-off ${s.autoOffMinutes} min, battery guard ${s.batteryMin}%")
+    }
+
+    private fun batteryTooLow(t: Telemetry) = settings.value.batteryMin > 0 && !t.charging && t.battery < settings.value.batteryMin
+
+    /** Find-my-phone: alarm sound and vibration, stops by itself after [RING_MS]. */
+    private fun ring(on: Boolean) {
+        ringStop?.cancel()
+        ringtone?.stop()
+        ringtone = null
+        val vibrator = getSystemService(VibratorManager::class.java).defaultVibrator
+        vibrator.cancel()
+        if (on) {
+            ringtone = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))?.apply {
+                audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
+                isLooping = true
+                play()
+            }
+            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 600, 400), 0))
+            ringStop = scope.launch {
+                delay(RING_MS)
+                ring(false)
+            }
+        }
+        if (ringing.value != on) AppLog.log(if (on) "Ringing" else "Ringing stopped")
+        ringing.value = on
+    }
+
     override fun onDestroy() {
+        ring(false)
         scope.cancel()
         unregisterReceiver(btReceiver)
         closeGatt()
@@ -124,6 +188,13 @@ class HotspotService : Service() {
     }
 
     private fun publish(p: PhoneState) {
+        // Battery guard: stop once when the battery drops below the threshold off the charger.
+        if (!batteryTooLow(p.telemetry)) batteryGuardFired = false
+        else if (p.hotspot.hotspot == Hotspot.ON && !batteryGuardFired) {
+            batteryGuardFired = true
+            AppLog.log("Battery below ${settings.value.batteryMin}%: stopping the hotspot")
+            hotspot.stop()
+        }
         phone.value = p
         stateBytes = p.encode()
         val ch = gatt?.getService(Protocol.SERVICE)?.getCharacteristic(Protocol.STATE)
@@ -226,20 +297,27 @@ class HotspotService : Service() {
     }
 
     private fun command(frame: ByteArray): Int {
-        val op = synchronized(nonce) {
+        val cmd = synchronized(nonce) {
             Protocol.verify(frame, nonce, credentials.secret).also { rng.nextBytes(nonce) }
         }
-        val status = when (op) {
-            null -> Protocol.ERR_REJECTED
-            Protocol.OP_STATUS -> BluetoothGatt.GATT_SUCCESS.also { scope.launch { phone.value?.let(::publish) } }
-            Protocol.OP_ON, Protocol.OP_OFF ->
-                if (hotspot.shizuku.value != ShizukuStatus.OK) Protocol.ERR_SHIZUKU
-                else BluetoothGatt.GATT_SUCCESS.also {
-                    scope.launch { if (op == Protocol.OP_ON) hotspot.start() else hotspot.stop() }
-                }
-            else -> Protocol.ERR_UNKNOWN_OP
+        val ok = BluetoothGatt.GATT_SUCCESS
+        val needsShizuku = cmd?.op in setOf(Protocol.OP_ON, Protocol.OP_OFF, Protocol.OP_BLOCK, Protocol.OP_UNBLOCK_ALL)
+        val status = when {
+            cmd == null -> Protocol.ERR_REJECTED
+            needsShizuku && hotspot.shizuku.value != ShizukuStatus.OK -> Protocol.ERR_SHIZUKU
+            cmd.op == Protocol.OP_ON && batteryTooLow(telemetry.telemetry.value) -> Protocol.ERR_BATTERY_LOW
+            cmd.op == Protocol.OP_BLOCK && cmd.arg.size != 6 -> Protocol.ERR_UNKNOWN_OP
+            else -> when (cmd.op) {
+                Protocol.OP_ON -> ok.also { scope.launch { hotspot.start() } }
+                Protocol.OP_OFF -> ok.also { scope.launch { hotspot.stop() } }
+                Protocol.OP_STATUS -> ok.also { scope.launch { phone.value?.let(::publish) } }
+                Protocol.OP_RING -> ok.also { scope.launch { ring(!ringing.value) } }
+                Protocol.OP_BLOCK -> ok.also { scope.launch { hotspot.block(MacAddress.fromBytes(cmd.arg)) } }
+                Protocol.OP_UNBLOCK_ALL -> ok.also { scope.launch { hotspot.unblockAll() } }
+                else -> Protocol.ERR_UNKNOWN_OP
+            }
         }
-        AppLog.log("BLE command op=$op → 0x%02x".format(status))
+        AppLog.log("BLE command op=${cmd?.op} → 0x%02x".format(status))
         return status
     }
 
@@ -317,3 +395,5 @@ class HotspotService : Service() {
         }
     }
 }
+
+data class Settings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0)

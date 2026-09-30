@@ -18,21 +18,28 @@ object Protocol {
     const val OP_ON = 0x01
     const val OP_OFF = 0x02
     const val OP_STATUS = 0x03
+    const val OP_RING = 0x04
+    const val OP_BLOCK = 0x05 // arg: client MAC, 6 bytes
+    const val OP_UNBLOCK_ALL = 0x06
 
     const val ERR_REJECTED = 0x80
     const val ERR_UNKNOWN_OP = 0x81
     const val ERR_SHIZUKU = 0x82
     const val ERR_PAIRING_CLOSED = 0x83
+    const val ERR_BATTERY_LOW = 0x84
 
     const val MAX_STATE = 512
+    const val MAX_ARG = 64
 
-    /** Returns the op if [frame] is `op ‖ nonce ‖ HMAC(key, op ‖ nonce)` for the current [nonce], else null. */
-    fun verify(frame: ByteArray, nonce: ByteArray, key: ByteArray): Int? {
-        if (frame.size != 49) return null
-        val signed = frame.copyOfRange(0, 17)
+    class Command(val op: Int, val arg: ByteArray)
+
+    /** Parses `op ‖ nonce ‖ arg ‖ HMAC(key, op ‖ nonce ‖ arg)`; null unless signed with [key] over the current [nonce]. */
+    fun verify(frame: ByteArray, nonce: ByteArray, key: ByteArray): Command? {
+        if (frame.size < 49 || frame.size > 49 + MAX_ARG) return null
+        val signed = frame.copyOfRange(0, frame.size - 32)
         val ok = MessageDigest.isEqual(signed.copyOfRange(1, 17), nonce) and
-            MessageDigest.isEqual(frame.copyOfRange(17, 49), hmac(key, signed))
-        return if (ok) frame[0].toInt() and 0xff else null
+            MessageDigest.isEqual(frame.copyOfRange(frame.size - 32, frame.size), hmac(key, signed))
+        return if (ok) Command(frame[0].toInt() and 0xff, signed.copyOfRange(17, signed.size)) else null
     }
 
     fun hmac(key: ByteArray, data: ByteArray): ByteArray =
@@ -52,14 +59,26 @@ data class HotspotState(val hotspot: Hotspot = Hotspot.OFF, val error: Int? = nu
 
 data class Client(val mac: String, val ip: String?, val name: String?)
 
-/** `net`: 0 none, 1 3G or older, 2 LTE, 3 5G NSA, 4 5G SA. `signal`: 0–4. */
-data class Telemetry(val battery: Int = 0, val charging: Boolean = false, val net: Int = 0, val signal: Int = 0)
+/** `net`: 0 none, 1 3G or older, 2 LTE, 3 5G NSA, 4 5G SA. `signal`: 0–4. `rsrp` dBm, `snr` dB. */
+data class Telemetry(
+    val battery: Int = 0,
+    val charging: Boolean = false,
+    val net: Int = 0,
+    val signal: Int = 0,
+    val operator: String? = null,
+    val rsrp: Int? = null,
+    val snr: Int? = null,
+)
+
+/** Things the service adds on top of the hotspot controller. */
+data class Extras(val blocked: Int = 0, val batteryMin: Int = 0, val ringing: Boolean = false)
 
 data class PhoneState(
     val hotspot: HotspotState,
     val clients: List<Client>,
     val telemetry: Telemetry,
     val shizuku: ShizukuStatus,
+    val extras: Extras = Extras(),
 ) {
     /** CBOR for the `state` characteristic; drops clients from the end until it fits [Protocol.MAX_STATE]. */
     fun encode(): ByteArray {
@@ -80,6 +99,13 @@ data class PhoneState(
             m["net"] = telemetry.net
             m["sig"] = telemetry.signal
             m["shz"] = shizuku.ordinal
+            // Optional keys, left out when empty so v1 readers and golden vectors stay valid.
+            telemetry.operator?.let { m["op"] = it }
+            telemetry.rsrp?.let { m["rsrp"] = it }
+            telemetry.snr?.let { m["snr"] = it }
+            if (extras.blocked > 0) m["blk"] = extras.blocked
+            if (extras.batteryMin > 0) m["bmin"] = extras.batteryMin
+            if (extras.ringing) m["ring"] = true
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes
             shown = shown.dropLast(1)
