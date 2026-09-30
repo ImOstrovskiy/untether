@@ -21,8 +21,10 @@
     <application
         android:name=".App"
         android:allowBackup="false"
-        android:label="Pixel Hotspot"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
             android:name=".MainActivity"

@@ -60,8 +60,11 @@ class HotspotService : Service() {
         const val ACTION_ON = "io.github.imostrovskiy.pixelhotspot.ON"
         const val ACTION_OFF = "io.github.imostrovskiy.pixelhotspot.OFF"
         const val ACTION_PAIR = "io.github.imostrovskiy.pixelhotspot.PAIR"
-        const val ACTION_CYCLE_AUTO_OFF = "io.github.imostrovskiy.pixelhotspot.CYCLE_AUTO_OFF"
-        const val ACTION_CYCLE_BATTERY_MIN = "io.github.imostrovskiy.pixelhotspot.CYCLE_BATTERY_MIN"
+        const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.pixelhotspot.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
+        const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.pixelhotspot.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
+        const val ACTION_BLOCK = "io.github.imostrovskiy.pixelhotspot.BLOCK" // extra EXTRA_MAC
+        const val EXTRA_VALUE = "value"
+        const val EXTRA_MAC = "mac"
         const val ACTION_UNBLOCK_ALL = "io.github.imostrovskiy.pixelhotspot.UNBLOCK_ALL"
         const val ACTION_STOP_RING = "io.github.imostrovskiy.pixelhotspot.STOP_RING"
         const val ACTION_FIND_MAC = "io.github.imostrovskiy.pixelhotspot.FIND_MAC"
@@ -73,18 +76,18 @@ class HotspotService : Service() {
         private const val PAIRING_WINDOW_MS = 60_000L
         private const val RING_MS = 20_000L
         private const val NOTIFICATION_ID = 1
-        private val AUTO_OFF_STEPS = listOf(10, 30, 60, 0) // minutes, 0 = never
-        private val BATTERY_MIN_STEPS = listOf(0, 10, 15, 20, 30) // %, 0 = off
+        val AUTO_OFF_STEPS = listOf(10, 30, 60, 0) // minutes, 0 = never
+        val BATTERY_MIN_STEPS = listOf(0, 10, 15, 20, 30) // %, 0 = off
 
         /** For the UI (same process). */
         val phone = MutableStateFlow<PhoneState?>(null)
         val pairingUntil = MutableStateFlow(0L)
-        val settings = MutableStateFlow(Settings())
+        val settings = MutableStateFlow(HotspotSettings())
         @Volatile var pairing: Pairing? = null
             private set
 
-        fun start(ctx: Context, action: String? = null) {
-            ctx.startForegroundService(Intent(ctx, HotspotService::class.java).setAction(action))
+        fun start(ctx: Context, action: String? = null, extras: Intent.() -> Unit = {}) {
+            ctx.startForegroundService(Intent(ctx, HotspotService::class.java).setAction(action).apply(extras))
         }
     }
 
@@ -118,12 +121,12 @@ class HotspotService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("service", "Service", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel("service", getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW),
         )
-        startForeground(NOTIFICATION_ID, notification("Starting…", shizukuLink = false),
+        startForeground(NOTIFICATION_ID, notification(getString(R.string.notif_starting), shizukuLink = false),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         credentials = Pairing.load(this).also { pairing = it }
-        settings.value = Settings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0))
+        settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0))
         hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes)
             .also { it.open() }
         telemetry = TelemetryMonitor(this).also { it.open() }
@@ -145,8 +148,13 @@ class HotspotService : Service() {
                 pairingUntil.value = SystemClock.elapsedRealtime() + PAIRING_WINDOW_MS
                 AppLog.log("Pairing window open for 60 s")
             }
-            ACTION_CYCLE_AUTO_OFF -> updateSettings { it.copy(autoOffMinutes = next(AUTO_OFF_STEPS, it.autoOffMinutes)) }
-            ACTION_CYCLE_BATTERY_MIN -> updateSettings { it.copy(batteryMin = next(BATTERY_MIN_STEPS, it.batteryMin)) }
+            ACTION_SET_AUTO_OFF -> intent.getIntExtra(EXTRA_VALUE, -1).takeIf { it in AUTO_OFF_STEPS }
+                ?.let { v -> updateSettings { it.copy(autoOffMinutes = v) } }
+            ACTION_SET_BATTERY_MIN -> intent.getIntExtra(EXTRA_VALUE, -1).takeIf { it in BATTERY_MIN_STEPS }
+                ?.let { v -> updateSettings { it.copy(batteryMin = v) } }
+            ACTION_BLOCK -> intent.getStringExtra(EXTRA_MAC)?.let { mac ->
+                runCatching { MacAddress.fromString(mac) }.getOrNull()?.let(hotspot::block)
+            }
             ACTION_UNBLOCK_ALL -> hotspot.unblockAll()
             ACTION_STOP_RING -> ring(false)
             ACTION_FIND_MAC -> findMac(!findMac.value)
@@ -200,9 +208,7 @@ class HotspotService : Service() {
         telemetry.refreshSims()
     }
 
-    private fun next(steps: List<Int>, cur: Int) = steps[(steps.indexOf(cur) + 1) % steps.size]
-
-    private fun updateSettings(change: (Settings) -> Settings) {
+    private fun updateSettings(change: (HotspotSettings) -> HotspotSettings) {
         val s = change(settings.value)
         settings.value = s
         prefs.edit().putInt("auto_off", s.autoOffMinutes).putInt("battery_min", s.batteryMin).apply()
@@ -210,7 +216,9 @@ class HotspotService : Service() {
         AppLog.log("Settings: auto-off ${s.autoOffMinutes} min, battery guard ${s.batteryMin}%")
     }
 
-    private fun batteryTooLow(t: Telemetry) = settings.value.batteryMin > 0 && !t.charging && t.battery < settings.value.batteryMin
+    // battery > 0: until the first ACTION_BATTERY_CHANGED arrives the level reads 0, which must not trip the guard.
+    private fun batteryTooLow(t: Telemetry) =
+        settings.value.batteryMin > 0 && t.battery > 0 && !t.charging && t.battery < settings.value.batteryMin
 
     /** Find-my-phone: alarm sound and vibration, stops by itself after [RING_MS]. */
     private fun ring(on: Boolean) {
@@ -270,9 +278,9 @@ class HotspotService : Service() {
 
     private fun updateNotification(p: PhoneState) {
         val text = when (p.shizuku) {
-            ShizukuStatus.NOT_RUNNING -> "Shizuku is not running. Tap to start it."
-            ShizukuStatus.NO_PERMISSION -> "Shizuku permission missing. Open the app to grant it."
-            ShizukuStatus.OK -> "Hotspot ${p.hotspot.hotspot.name.lowercase()}, ${p.clients.size} client(s)"
+            ShizukuStatus.NOT_RUNNING -> getString(R.string.notif_shizuku_not_running)
+            ShizukuStatus.NO_PERMISSION -> getString(R.string.notif_shizuku_no_permission)
+            ShizukuStatus.OK -> getString(R.string.notif_status, getString(hotspotLabel(p.hotspot.hotspot)), p.clients.size)
         }
         if (text == notificationText) return
         notificationText = text
@@ -284,8 +292,8 @@ class HotspotService : Service() {
         val target = (if (shizukuLink) packageManager.getLaunchIntentForPackage(ShizukuProvider.MANAGER_APPLICATION_ID) else null)
             ?: Intent(this, MainActivity::class.java)
         return Notification.Builder(this, "service")
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-            .setContentTitle("Pixel Hotspot")
+            .setSmallIcon(R.drawable.ic_wifi_tethering)
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(PendingIntent.getActivity(this, 0, target,
@@ -468,4 +476,12 @@ class HotspotService : Service() {
     }
 }
 
-data class Settings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0)
+data class HotspotSettings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0)
+
+fun hotspotLabel(h: Hotspot) = when (h) {
+    Hotspot.OFF -> R.string.hs_off
+    Hotspot.STARTING -> R.string.hs_starting
+    Hotspot.ON -> R.string.hs_on
+    Hotspot.STOPPING -> R.string.hs_stopping
+    Hotspot.ERROR -> R.string.hs_error_short
+}

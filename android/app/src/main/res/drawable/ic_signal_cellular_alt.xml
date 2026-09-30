@@ -1,0 +1,10 @@
+<!-- Material Symbols Rounded "signal_cellular_alt", Apache-2.0 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path android:fillColor="@android:color/white" android:pathData="M217.5-177.5Q200-195 200-220v-120q0-25 17.5-42.5T260-400q25 0 42.5 17.5T320-340v120q0 25-17.5 42.5T260-160q-25 0-42.5-17.5Zm240 0Q440-195 440-220v-320q0-25 17.5-42.5T500-600q25 0 42.5 17.5T560-540v320q0 25-17.5 42.5T500-160q-25 0-42.5-17.5Zm240 0Q680-195 680-220v-520q0-25 17.5-42.5T740-800q25 0 42.5 17.5T800-740v520q0 25-17.5 42.5T740-160q-25 0-42.5-17.5Z" />
+    </group>
+</vector>
