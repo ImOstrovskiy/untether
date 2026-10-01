@@ -169,7 +169,15 @@ class HotspotService : Service() {
             ACTION_STOP -> {
                 prefs.edit().putBoolean("stopped", true).apply()
                 AppLog.log("Stopped by the user")
-                stopSelf()
+                // The BLE link outlives the GATT server: say goodbye so the Mac lets go right away.
+                stateBytes = Cbor.encode(linkedMapOf("v" to 1, "bye" to true))
+                gatt?.getService(Protocol.SERVICE)?.getCharacteristic(Protocol.STATE)?.let { ch ->
+                    subscribers.values.forEach { notify(it, ch, stateBytes) }
+                }
+                scope.launch {
+                    delay(500)
+                    stopSelf()
+                }
                 return START_NOT_STICKY
             }
             ACTION_RESUME -> prefs.edit().putBoolean("stopped", false).apply()

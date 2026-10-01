@@ -283,6 +283,15 @@ func (p *Phone) handleState(b []byte) {
 		slog.Warn("bad state", "err", err)
 		return
 	}
+	if st.Bye { // the link would outlive the phone's GATT server; let go so the menu shows it
+		slog.Info("Untether was stopped on the phone")
+		p.mu.Lock()
+		if p.dev != nil {
+			_ = p.dev.Disconnect()
+		}
+		p.mu.Unlock()
+		return
+	}
 	p.lastState.Store(time.Now().UnixMilli())
 	p.onState(&st)
 }

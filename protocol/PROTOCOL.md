@@ -117,6 +117,7 @@ treats 150 s without state on a live link as a dead link and reconnects.
 | `ring` | bool | find-my-phone is ringing, present when true *(v1.1)* |
 | `fmac` | bool | the phone asks the Mac to play a sound, present when true *(v1.1)* |
 | `wifi` | uint | 0–4, present while the phone's own internet is Wi-Fi, which the hotspot then shares *(v1.1, optional)* |
+| `bye` | bool | sent alone with `v` as the last notification when the user stops Untether on the phone; the Mac drops the link *(v1.1)* |
 
 Readers must ignore unknown keys.
 
