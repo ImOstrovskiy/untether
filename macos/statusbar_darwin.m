@@ -33,7 +33,7 @@ static const CGFloat kWidth = 340;
     self.popover.behavior = NSPopoverBehaviorTransient;
     self.popover.animates = YES;
 
-    self.item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
+    self.item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
     self.item.button.target = self;
     self.item.button.action = @selector(toggle:);
     self.item.button.toolTip = @"Untether";
@@ -86,14 +86,19 @@ void phtEval(const char *js) {
     });
 }
 
-// PNG bytes of an 18 pt @2x template image.
-void phtSetIcon(const void *png, int len) {
+// PNG bytes of an 18 pt high @2x template image, and a short text after it ("" for none).
+void phtSetIcon(const void *png, int len, const char *title) {
     NSData *data = [NSData dataWithBytes:png length:len];
+    NSString *text = [NSString stringWithUTF8String:title];
     dispatch_async(dispatch_get_main_queue(), ^{
         NSImage *img = [[NSImage alloc] initWithData:data];
-        img.size = NSMakeSize(18, 18);
+        img.size = NSMakeSize(img.representations.firstObject.pixelsWide / 2.0, 18);
         img.template = YES;
-        controller.item.button.image = img;
+        NSStatusBarButton *button = controller.item.button;
+        button.image = img;
+        button.font = [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold];
+        button.title = text;
+        button.imagePosition = text.length ? NSImageLeft : NSImageOnly;
     });
 }
 

@@ -29,7 +29,8 @@
 - **One click, online.** The Mac asks the phone to start its hotspot and joins it straight away,
   without a Wi-Fi scan: about 4–5 s from click to internet.
 - **The phone at a glance.** Battery and temperature, operator, network type (LTE, 5G NSA/SA),
-  RSRP and SINR with live graphs, and the devices on the hotspot.
+  RSRP and SINR with live graphs, and the devices on the hotspot. Signal bars and the network type
+  sit right next to the menu bar icon.
 - **Control from the Mac.** Choose the SIM for mobile data, reconnect mobile data when it hangs,
   block a device on the hotspot, ring the phone when it is lost in the sofa.
 - **And back.** The phone can ring the Mac.

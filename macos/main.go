@@ -16,12 +16,12 @@ import (
 )
 
 type config struct {
-	AutoOff bool `json:"auto_off"` // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
+	AutoOff    bool `json:"auto_off"`    // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
+	HideSignal bool `json:"hide_signal"` // no signal bars and network type next to the menu bar icon
 }
 
 type app struct {
 	phone *Phone
-	icons [5][]byte
 
 	renderMu sync.Mutex // render is called from many goroutines
 
@@ -36,15 +36,12 @@ type app struct {
 	lang     string  // UI language: en, uk
 	joinTook float64 // seconds from click to joined, last time
 	finding  bool    // the phone asked this Mac to play a sound
-	lastIcon int     // status item icon currently shown (-1 = none yet)
+	lastIcon iconKey // status item icon currently shown
 }
 
 func main() {
 	setupLog()
-	a := &app{cfg: loadConfig()}
-	for i := range a.icons {
-		a.icons[i] = hotspotIcon(i)
-	}
+	a := &app{cfg: loadConfig(), lastIcon: iconKey{state: -1}}
 	creds, err := loadPairing()
 	if err != nil {
 		slog.Warn("keychain", "err", err)
@@ -52,7 +49,6 @@ func main() {
 	a.creds = creds
 	a.phone = NewPhone(bluetooth.DefaultAdapter, a.getCreds, a.onPaired, a.onState)
 	a.lang = systemLanguage()
-	a.lastIcon = -1
 	runUI(a.start, a.handleAction)
 }
 

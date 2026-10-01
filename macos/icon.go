@@ -59,9 +59,24 @@ var hook = []shape{
 	segment(6, 13.5, 6, 12.5, 1),
 }
 
-// hotspotIcon draws the 36×36 template image (18 pt @2x) for a state.
-func hotspotIcon(state int) []byte {
+// hotspotIcon draws the template image (18 pt high @2x) for a state. With bars 0–4 the phone's
+// signal follows the mark, unlit bars dimmed; with bars < 0 the image is the square mark alone.
+func hotspotIcon(state, bars int) []byte {
 	parts := append([]shape{}, hook...)
+	var dim []shape
+	width := 24.0
+	if bars >= 0 {
+		width = 32
+		for i := range 4 {
+			x, top := 20.5+3.2*float64(i), 19.5-float64(5+3*i)
+			bar := segment(x, 18.5, x, top+1, 1)
+			if i < bars {
+				parts = append(parts, bar)
+			} else {
+				dim = append(dim, bar)
+			}
+		}
+	}
 	alpha := 1.0
 	switch state {
 	case iconDisconnected:
@@ -77,26 +92,46 @@ func hotspotIcon(state int) []byte {
 	}
 	const size, ss = 36, 4 // ss×ss supersampling
 	scale := 24.0 / size
-	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	w := int(width / scale)
+	inked := func(shapes []shape, x, y float64) bool {
+		for _, p := range shapes {
+			if p(x, y) <= 0 {
+				return true
+			}
+		}
+		return false
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, w, size))
 	for py := 0; py < size; py++ {
-		for px := 0; px < size; px++ {
-			hits := 0
+		for px := 0; px < w; px++ {
+			ink := 0.0
 			for sy := 0; sy < ss; sy++ {
 				for sx := 0; sx < ss; sx++ {
 					x := (float64(px) + (float64(sx)+0.5)/ss) * scale
 					y := (float64(py) + (float64(sy)+0.5)/ss) * scale
-					for _, p := range parts {
-						if p(x, y) <= 0 {
-							hits++
-							break
-						}
+					if inked(parts, x, y) {
+						ink++
+					} else if inked(dim, x, y) {
+						ink += 0.3
 					}
 				}
 			}
-			img.SetNRGBA(px, py, color.NRGBA{A: uint8(255 * alpha * float64(hits) / (ss * ss))})
+			img.SetNRGBA(px, py, color.NRGBA{A: uint8(255 * alpha * ink / (ss * ss))})
 		}
 	}
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)
 	return buf.Bytes()
+}
+
+// menuSignal is what the status item shows of the phone's network: bars (-1 for none) and a label.
+func menuSignal(st *State, hide bool) (int, string) {
+	if st == nil || hide {
+		return -1, ""
+	}
+	label := ""
+	if st.Net >= 1 && st.Net <= 4 {
+		label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
+	}
+	return min(max(st.Sig, 0), 4), label
 }

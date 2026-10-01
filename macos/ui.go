@@ -6,7 +6,7 @@ package main
 #include <stdlib.h>
 void phtRun(const char *html);
 void phtEval(const char *js);
-void phtSetIcon(const void *png, int len);
+void phtSetIcon(const void *png, int len, const char *title);
 void phtShowPopover(void);
 void phtFindSound(int on);
 void phtQuit(void);
@@ -64,9 +64,13 @@ func uiEval(js string) {
 	C.phtEval(cs)
 }
 
-func uiSetIcon(png []byte) { C.phtSetIcon(unsafe.Pointer(&png[0]), C.int(len(png))) }
-func uiShow()              { C.phtShowPopover() }
-func uiQuit()              { C.phtQuit() }
+func uiSetIcon(png []byte, title string) {
+	ct := C.CString(title)
+	defer C.free(unsafe.Pointer(ct))
+	C.phtSetIcon(unsafe.Pointer(&png[0]), C.int(len(png)), ct)
+}
+func uiShow() { C.phtShowPopover() }
+func uiQuit() { C.phtQuit() }
 
 func uiFindSound(on bool) {
 	v := C.int(0)
@@ -100,6 +104,7 @@ type uiState struct {
 	Settings struct {
 		Login   bool `json:"login"`
 		AutoOff bool `json:"autoOff"`
+		Signal  bool `json:"signal"`
 	} `json:"settings"`
 	Phone *State `json:"phone"`
 }
@@ -113,7 +118,9 @@ func (a *app) render() {
 		Note: a.note, JoinTook: a.joinTook, Phone: a.state,
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
-	icon := iconFor(a.state, a.busy)
+	st.Settings.Signal = !a.cfg.HideSignal
+	icon := iconKey{state: iconFor(a.state, a.busy)}
+	icon.bars, icon.label = menuSignal(a.state, a.cfg.HideSignal)
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
 
@@ -124,9 +131,15 @@ func (a *app) render() {
 	}
 	uiEval("window.render && render(" + string(b) + ")")
 	if icon != a.lastIcon {
-		uiSetIcon(a.icons[icon])
+		uiSetIcon(hotspotIcon(icon.state, icon.bars), icon.label)
 		a.lastIcon = icon
 	}
+}
+
+// iconKey is everything the status item shows.
+type iconKey struct {
+	state, bars int
+	label       string
 }
 
 func iconFor(st *State, busy string) int {
@@ -173,9 +186,13 @@ func (a *app) handleAction(action, arg string) {
 			a.setNote("Launch at login: " + err.Error())
 		}
 		a.render()
-	case "autoOff":
+	case "autoOff", "signal":
 		a.mu.Lock()
-		a.cfg.AutoOff = !a.cfg.AutoOff
+		if action == "autoOff" {
+			a.cfg.AutoOff = !a.cfg.AutoOff
+		} else {
+			a.cfg.HideSignal = !a.cfg.HideSignal
+		}
 		err := a.cfg.save()
 		a.mu.Unlock()
 		if err != nil {
