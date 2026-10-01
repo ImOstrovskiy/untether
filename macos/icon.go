@@ -44,6 +44,15 @@ func arc(cx, cy, r, a0, a1, hw float64) shape {
 	}
 }
 
+// roundedBox spans x0..x1, y0..y1 with corner radius r.
+func roundedBox(x0, y0, x1, y1, r float64) shape {
+	cx, cy, hx, hy := (x0+x1)/2, (y0+y1)/2, (x1-x0)/2-r, (y1-y0)/2-r
+	return func(x, y float64) float64 {
+		qx, qy := math.Abs(x-cx)-hx, math.Abs(y-cy)-hy
+		return math.Hypot(math.Max(qx, 0), math.Max(qy, 0)) + math.Min(math.Max(qx, qy), 0) - r
+	}
+}
+
 func disc(cx, cy, r float64) shape {
 	return func(x, y float64) float64 { return math.Hypot(x-cx, y-cy) - r }
 }
@@ -66,10 +75,11 @@ func hotspotIcon(state, bars int) []byte {
 	var dim []shape
 	width := 24.0
 	if bars >= 0 {
-		width = 32
+		const left, w, step = 22.3, 2.6, 3.4 // the gap after the hook matches the one before the label
+		width = left + w + 3*step + 0.5
 		for i := range 4 {
-			x, top := 20.5+3.2*float64(i), 19.5-float64(5+3*i)
-			bar := segment(x, 18.5, x, top+1, 1)
+			x := left + step*float64(i)
+			bar := roundedBox(x, 19.5-(4.5+3.5*float64(i)), x+w, 19.5, 0.9)
 			if i < bars {
 				parts = append(parts, bar)
 			} else {
@@ -90,9 +100,15 @@ func hotspotIcon(state, bars int) []byte {
 	case iconError:
 		parts = append(parts, segment(4.4, 6, 7.6, 9.2, 1), segment(7.6, 6, 4.4, 9.2, 1))
 	}
+	return rasterize(parts, dim, width, alpha)
+}
+
+// rasterize draws shapes into a template PNG 36 px (18 pt @2x) high and width glyph units wide;
+// dim shapes get 30% of the ink.
+func rasterize(parts, dim []shape, width, alpha float64) []byte {
 	const size, ss = 36, 4 // ss×ss supersampling
 	scale := 24.0 / size
-	w := int(width / scale)
+	w := int(math.Ceil(width / scale))
 	inked := func(shapes []shape, x, y float64) bool {
 		for _, p := range shapes {
 			if p(x, y) <= 0 {

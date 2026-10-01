@@ -19,13 +19,13 @@ func TestSignalIcon(t *testing.T) {
 		t.Errorf("mark alone: width %d, want 36", w)
 	}
 	b := hotspotIcon(iconOn, 2)
-	if w := pngWidth(t, b); w != 48 {
-		t.Errorf("with bars: width %d, want 48", w)
+	if w := pngWidth(t, b); w != 54 {
+		t.Errorf("with bars: width %d, want 54", w)
 	}
-	if a := alphaAt(b, 20.5, 17); a < 200 {
+	if a := alphaAt(b, 23.6, 17); a < 200 {
 		t.Errorf("lit bar alpha %d", a)
 	}
-	if a := alphaAt(b, 30.1, 17); a < 40 || a > 120 {
+	if a := alphaAt(b, 33.8, 17); a < 40 || a > 120 {
 		t.Errorf("unlit bar alpha %d, want dimmed", a)
 	}
 	for _, c := range []struct {
