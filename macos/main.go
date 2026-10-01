@@ -16,8 +16,8 @@ import (
 )
 
 type config struct {
-	AutoOff    bool `json:"auto_off"`    // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
-	HideSignal bool `json:"hide_signal"` // no signal bars and network type next to the menu bar icon
+	AutoOff  bool   `json:"auto_off"`  // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
+	MenuIcon string `json:"menu_icon"` // menu bar style: menuBoth, menuSignal, menuWhenOn, menuMark
 }
 
 type app struct {

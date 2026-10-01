@@ -199,7 +199,9 @@ const T = {
     mobile: "Mobile network", noNet: "No network", dataSim: "SIM for data", quality: "Signal quality",
     devices: "Devices on the hotspot", none: "No devices yet", block: "Block", unblockAll: "Unblock all ({0})", blocked: "{0} blocked",
     general: "General", login: "Launch at login", autoOff: "Turn off on sleep or when leaving it", autoOffHint: "Needs Location permission",
-    menuSignal: "Signal in the menu bar", menuSignalHint: "Bars and network type next to the icon",
+    menuIcon: "Menu bar", menuBoth: "Both", menuSignal: "Signal", menuWhenOn: "Auto", menuMark: "Icon",
+    menuBothHint: "The icon and the phone's signal", menuSignalHint: "The phone's signal; the icon while there is something to say",
+    menuWhenOnHint: "The icon; the signal while the hotspot is on", menuMarkHint: "Only the icon",
     phoneSection: "Phone", pair: "Pair with phone…", pairHint: "Tap Pair Mac on the phone first", forget: "Forget phone",
    
     quit: "Quit", shizukuDown: "Shizuku is not running on the phone", shizukuPerm: "Shizuku has no permission on the phone",
@@ -219,7 +221,9 @@ const T = {
     mobile: "Мобільна мережа", noNet: "Немає мережі", dataSim: "SIM для даних", quality: "Якість сигналу",
     devices: "Пристрої на точці доступу", none: "Поки немає пристроїв", block: "Заблокувати", unblockAll: "Розблокувати всі ({0})", blocked: "{0} заблоковано",
     general: "Загальне", login: "Запускати при вході", autoOff: "Вимикати при сні або виході з мережі", autoOffHint: "Потрібен доступ до геолокації",
-    menuSignal: "Сигнал у рядку меню", menuSignalHint: "Смужки й тип мережі поруч з іконкою",
+    menuIcon: "Рядок меню", menuBoth: "Обидва", menuSignal: "Сигнал", menuWhenOn: "Авто", menuMark: "Іконка",
+    menuBothHint: "Іконка й сигнал телефона", menuSignalHint: "Сигнал телефона; іконка, коли є що сказати",
+    menuWhenOnHint: "Іконка; сигнал, поки точка доступу ввімкнена", menuMarkHint: "Лише іконка",
     phoneSection: "Телефон", pair: "Сполучити з телефоном…", pairHint: "Спершу натисніть «Під'єднати Mac» на телефоні", forget: "Забути телефон",
    
     quit: "Вийти", shizukuDown: "На телефоні не запущено Shizuku", shizukuPerm: "Shizuku не має дозволу на телефоні",
@@ -231,6 +235,8 @@ const T = {
   },
 };
 const NET = [null, "3G", "LTE", "5G NSA", "5G SA"];
+// Menu bar styles, the values of config.MenuIcon on the Go side.
+const MENU_ICONS = [["", "menuBoth"], ["signal", "menuSignal"], ["connected", "menuWhenOn"], ["icon", "menuMark"]];
 const HOT_C = 42;
 
 let S = null;          // last state from Go (or the demo)
@@ -413,8 +419,8 @@ function settings() {
       <div class="switch ${st.login ? "on" : ""}" onclick="send('login')"></div></div>
     <div class="row">${icon("bedtime")}<div class="grow"><div class="label">${t("autoOff")}</div><div class="hint">${t("autoOffHint")}</div></div>
       <div class="switch ${st.autoOff ? "on" : ""}" onclick="send('autoOff')"></div></div>
-    <div class="row">${icon("signal_cellular_alt")}<div class="grow"><div class="label">${t("menuSignal")}</div><div class="hint">${t("menuSignalHint")}</div></div>
-      <div class="switch ${st.signal ? "on" : ""}" onclick="send('signal')"></div></div>
+    <div class="row">${icon("signal_cellular_alt")}<div class="grow"><div class="label">${t("menuIcon")}</div><div class="hint">${t(MENU_ICONS.find(([v]) => v === (st.menuIcon || ""))[1] + "Hint")}</div></div></div>
+    <div class="seg">${MENU_ICONS.map(([v, k]) => `<button class="${v === (st.menuIcon || "") ? "on" : ""}" onclick="send('menuIcon', '${v}')">${t(k)}</button>`).join("")}</div>
   </div>
   <h2>${t("phoneSection")}</h2>
   <div class="card">
@@ -429,7 +435,7 @@ function settings() {
 function demoState(kind) {
   const base = {
     lang: (navigator.language || "en").slice(0, 2), version: "0.2.0", paired: true, phoneName: "Pixel 9", busy: "", note: "",
-    joinTook: 4.2, settings: { login: true, autoOff: false, signal: true },
+    joinTook: 4.2, settings: { login: true, autoOff: false, menuIcon: "" },
     phone: { hs: 0, ssid: "Untether-4F2A", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
       temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, blk: 0, bmin: 10 },
   };
@@ -444,14 +450,14 @@ function demoState(kind) {
 let demoKind = "on";
 function demoSet(kind) { demoKind = kind; render(Object.assign(demoState(kind), { lang: S ? S.lang : undefined })); }
 function demoLang() { const order = ["en", "uk"]; S.lang = order[(order.indexOf(S.lang) + 1) % 2]; draw(); }
-function demoAction(action) {
+function demoAction(action, arg) {
   const p = S.phone;
   if (action === "toggle" && p) { p.hs = p.hs === 2 ? 0 : 2; }
   if (action === "ring" && p) p.ring = !p.ring;
   if (action === "stopFindMac" && p) p.fmac = false;
   if (action === "login") S.settings.login = !S.settings.login;
   if (action === "autoOff") S.settings.autoOff = !S.settings.autoOff;
-  if (action === "signal") S.settings.signal = !S.settings.signal;
+  if (action === "menuIcon") S.settings.menuIcon = arg;
   draw();
 }
 

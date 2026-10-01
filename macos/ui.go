@@ -102,9 +102,9 @@ type uiState struct {
 	Note     string  `json:"note"`
 	JoinTook float64 `json:"joinTook,omitempty"`
 	Settings struct {
-		Login   bool `json:"login"`
-		AutoOff bool `json:"autoOff"`
-		Signal  bool `json:"signal"`
+		Login    bool   `json:"login"`
+		AutoOff  bool   `json:"autoOff"`
+		MenuIcon string `json:"menuIcon"`
 	} `json:"settings"`
 	Phone *State `json:"phone"`
 }
@@ -118,9 +118,8 @@ func (a *app) render() {
 		Note: a.note, JoinTook: a.joinTook, Phone: a.state,
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
-	st.Settings.Signal = !a.cfg.HideSignal
-	icon := iconKey{state: iconFor(a.state, a.busy)}
-	icon.bars, icon.label = menuSignal(a.state, a.cfg.HideSignal)
+	st.Settings.MenuIcon = a.cfg.MenuIcon
+	icon := menuIcon(a.state, a.busy, a.cfg.MenuIcon)
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
 
@@ -131,15 +130,9 @@ func (a *app) render() {
 	}
 	uiEval("window.render && render(" + string(b) + ")")
 	if icon != a.lastIcon {
-		uiSetIcon(hotspotIcon(icon.state, icon.bars), icon.label)
+		uiSetIcon(hotspotIcon(icon.state, icon.bars, icon.mark), icon.label)
 		a.lastIcon = icon
 	}
-}
-
-// iconKey is everything the status item shows.
-type iconKey struct {
-	state, bars int
-	label       string
 }
 
 func iconFor(st *State, busy string) int {
@@ -186,12 +179,15 @@ func (a *app) handleAction(action, arg string) {
 			a.setNote("Launch at login: " + err.Error())
 		}
 		a.render()
-	case "autoOff", "signal":
+	case "autoOff", "menuIcon":
+		if action == "menuIcon" && arg != menuBoth && arg != menuSignal && arg != menuWhenOn && arg != menuMark {
+			return
+		}
 		a.mu.Lock()
 		if action == "autoOff" {
 			a.cfg.AutoOff = !a.cfg.AutoOff
 		} else {
-			a.cfg.HideSignal = !a.cfg.HideSignal
+			a.cfg.MenuIcon = arg
 		}
 		err := a.cfg.save()
 		a.mu.Unlock()

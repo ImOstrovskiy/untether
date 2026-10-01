@@ -68,37 +68,44 @@ var hook = []shape{
 	segment(6, 14.5, 6, 13.5, 1),
 }
 
-// hotspotIcon draws the template image (18 pt high @2x) for a state. With bars 0–4 the phone's
-// signal follows the mark, unlit bars dimmed; with bars < 0 the image is the square mark alone.
-func hotspotIcon(state, bars int) []byte {
-	parts := append([]shape{}, hook...)
-	var dim []shape
-	width := 24.0
+// hotspotIcon draws the template image (18 pt high @2x): the mark for a state, then the phone's
+// signal unless bars < 0, unlit bars dimmed. At least one of the two must be there.
+func hotspotIcon(state, bars int, mark bool) []byte {
+	var parts, dim []shape
+	width, left, alpha := 0.0, 0.5, 1.0
+	if mark {
+		parts = append(parts, hook...)
+		switch state {
+		case iconDisconnected:
+			parts, alpha = append(parts, ring(6, 8.6, 1.5, 1)), 0.35
+		case iconOff:
+			parts = append(parts, ring(6, 8.6, 1.5, 1))
+		case iconBusy:
+			parts = append(parts, disc(6, 8.6, 1.9))
+		case iconOn:
+			parts = append(parts, disc(6, 8.6, 1.9), arc(6, 8.6, 4.3, 215, 305, 1))
+		case iconError:
+			parts = append(parts, segment(4.4, 7, 7.6, 10.2, 1), segment(7.6, 7, 4.4, 10.2, 1))
+		}
+		width, left = 24, 22.3 // the gap after the hook matches the one before the label
+	}
 	if bars >= 0 {
-		const left, w, step = 22.3, 2.6, 3.4 // the gap after the hook matches the one before the label
-		width = left + w + 3*step + 0.5
+		// After the iPhone status bar: bars twice as wide as their gaps, 1.15 to 3 times as tall as
+		// wide, standing on the label's baseline and as tall as its capitals (11 pt semibold), so the
+		// bars and "LTE" read as one.
+		const base, top = 18.3, 7.0 // measured against the label in the menu bar
+		const w, gap = (base - top) / 3, 1.5
 		for i := range 4 {
-			x := left + step*float64(i)
-			bar := roundedBox(x, 19.5-(4.5+3.5*float64(i)), x+w, 19.5, 0.9)
+			x := left + (w+gap)*float64(i)
+			h := (base - top) * (1.15 + 1.85*float64(i)/3) / 3
+			bar := roundedBox(x, base-h, x+w, base, 0.9)
 			if i < bars {
 				parts = append(parts, bar)
 			} else {
 				dim = append(dim, bar)
 			}
 		}
-	}
-	alpha := 1.0
-	switch state {
-	case iconDisconnected:
-		parts, alpha = append(parts, ring(6, 8.6, 1.5, 1)), 0.35
-	case iconOff:
-		parts = append(parts, ring(6, 8.6, 1.5, 1))
-	case iconBusy:
-		parts = append(parts, disc(6, 8.6, 1.9))
-	case iconOn:
-		parts = append(parts, disc(6, 8.6, 1.9), arc(6, 8.6, 4.3, 215, 305, 1))
-	case iconError:
-		parts = append(parts, segment(4.4, 7, 7.6, 10.2, 1), segment(7.6, 7, 4.4, 10.2, 1))
+		width = left + 4*w + 3*gap + 0.5
 	}
 	return rasterize(parts, dim, width, alpha)
 }
@@ -140,14 +147,32 @@ func rasterize(parts, dim []shape, width, alpha float64) []byte {
 	return buf.Bytes()
 }
 
-// menuSignal is what the status item shows of the phone's network: bars (-1 for none) and a label.
-func menuSignal(st *State, hide bool) (int, string) {
-	if st == nil || hide {
-		return -1, ""
+// Menu bar styles, config.MenuIcon.
+const (
+	menuBoth   = ""          // the mark and the phone's signal
+	menuSignal = "signal"    // the signal alone
+	menuWhenOn = "connected" // the mark; the signal alone while the hotspot is on
+	menuMark   = "icon"      // the mark alone
+)
+
+// iconKey is everything the status item shows.
+type iconKey struct {
+	state, bars int // bars < 0: none
+	mark        bool
+	label       string
+}
+
+// menuIcon is what the status item shows in a menu bar style. The mark stays whenever it has
+// something to say: no phone, a command running, an error.
+func menuIcon(st *State, busy, style string) iconKey {
+	k := iconKey{state: iconFor(st, busy), bars: -1, mark: true}
+	if st == nil || style == menuMark || (style == menuWhenOn && st.HS != hsOn) {
+		return k
 	}
-	label := ""
+	k.bars = min(max(st.Sig, 0), 4)
 	if st.Net >= 1 && st.Net <= 4 {
-		label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
+		k.label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
 	}
-	return min(max(st.Sig, 0), 4), label
+	k.mark = style == menuBoth || (k.state != iconOn && k.state != iconOff)
+	return k
 }
