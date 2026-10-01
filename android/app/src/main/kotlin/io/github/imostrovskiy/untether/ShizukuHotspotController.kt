@@ -55,7 +55,7 @@ class ShizukuHotspotController(
     private val _radio = MutableStateFlow<RadioMode?>(null)
     val radio: StateFlow<RadioMode?> = _radio
 
-    /** Per SIM, the network types it had before Untether locked it: what Auto goes back to. */
+    /** Per SIM, the network types it had before Untether locked it (what Auto goes back to); the hotspot fallback. */
     private val defaults = ctx.getSharedPreferences("network", Context.MODE_PRIVATE)
 
     /** Number of clients on the hotspot's blocklist. */
@@ -85,6 +85,10 @@ class ShizukuHotspotController(
     private var bound = false
     private var closed = false
     private var configSynced = false
+    /** Our start is under way: a SoftAP failure then means our config, not someone else's. */
+    private var starting = false
+    /** The fast config (5 GHz channel 36, WPA3) once failed to start here; the compatible one is used since. */
+    private var compatible = defaults.getBoolean(COMPATIBLE_KEY, false)
     @Volatile private var tetheredSsid: String? = null
 
     private val serviceArgs = Shizuku.UserServiceArgs(ComponentName(ctx.packageName, HotspotShell::class.java.name))
@@ -130,6 +134,8 @@ class ShizukuHotspotController(
         }
         override fun onNetwork(ssid: String, pass: String) {
             _network.value = HotspotNetwork(ssid, pass)
+            // Show the network that is really on the air, also when it was set by hand in Android.
+            _state.update { if (it.hotspot == Hotspot.ON && tetheredSsid == null) it.copy(ssid = ssid) else it }
         }
     }
 
@@ -161,8 +167,18 @@ class ShizukuHotspotController(
     fun start() {
         clearError()
         val shell = remote ?: return AppLog.log("start: Shizuku not ready")
-        if (!configSynced) syncConfig()
-        call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced && !stockNetwork) }
+        // Every time: the config may have been changed by hand in Android since.
+        syncConfig()
+        starting = true
+        call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced && !stockNetwork, compatible) }
+    }
+
+    /** Our hotspot failed to come up with the fast config: switch to the compatible one for good, once. */
+    private fun startCompatible() {
+        compatible = true
+        defaults.edit().putBoolean(COMPATIBLE_KEY, true).apply()
+        AppLog.log("Hotspot failed on 5 GHz channel 36 with WPA3; starting it on any band with WPA2, from now on")
+        start()
     }
 
     fun stop() {
@@ -223,7 +239,17 @@ class ShizukuHotspotController(
         return error == null
     }
 
-    private fun onApState(s: Int) = _state.update { cur ->
+    private fun onApState(s: Int) {
+        if (s == AP_FAILED && starting && !compatible && !stockNetwork) {
+            starting = false
+            return startCompatible()
+        }
+        if (s == AP_ENABLED || s == AP_FAILED || s == AP_DISABLED) starting = false
+        if (s == AP_ENABLED) runCatching { remote?.readNetwork() }
+        setApState(s)
+    }
+
+    private fun setApState(s: Int) = _state.update { cur ->
         when (s) {
             AP_ENABLING -> HotspotState(Hotspot.STARTING)
             // The tethering callback does not always carry the config; the system config is ours anyway.
@@ -258,11 +284,12 @@ class ShizukuHotspotController(
     private fun syncConfig() {
         val shell = remote ?: return
         configSynced = call("Hotspot config sync") {
-            shell.syncConfig(ssid.takeUnless { stockNetwork }, pass.takeUnless { stockNetwork }, autoOffMinutes)
+            shell.syncConfig(ssid.takeUnless { stockNetwork }, pass.takeUnless { stockNetwork }, autoOffMinutes, compatible)
         }
     }
 
     private companion object {
+        const val COMPATIBLE_KEY = "compatible_hotspot"
         val LTE_TYPES = NETWORK_TYPE_BITMASK_LTE or NETWORK_TYPE_BITMASK_LTE_CA
         val G3_TYPES = NETWORK_TYPE_BITMASK_UMTS or NETWORK_TYPE_BITMASK_HSDPA or NETWORK_TYPE_BITMASK_HSUPA or
             NETWORK_TYPE_BITMASK_HSPA or NETWORK_TYPE_BITMASK_HSPAP or NETWORK_TYPE_BITMASK_TD_SCDMA

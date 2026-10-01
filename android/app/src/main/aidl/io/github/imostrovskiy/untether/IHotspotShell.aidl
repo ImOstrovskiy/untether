@@ -12,9 +12,10 @@ interface IHotspotShell {
 
     String open(IHotspotEvents events) = 1;
     int apState() = 2;
-    /** ssid and pass null: keep the network set in Android's own hotspot settings. */
-    String syncConfig(String ssid, String pass, int autoOffMinutes) = 3;
-    String startTethering(String ssid, String pass, int autoOffMinutes, boolean withConfig) = 4;
+    /** ssid and pass null: keep the network set in Android's own hotspot settings. compatible: any
+     *  band and WPA2 instead of 5 GHz channel 36 and WPA3, for chips that cannot start the latter. */
+    String syncConfig(String ssid, String pass, int autoOffMinutes, boolean compatible) = 3;
+    String startTethering(String ssid, String pass, int autoOffMinutes, boolean withConfig, boolean compatible) = 4;
     String stopTethering() = 5;
     /** Adds mac to the hotspot blocklist; null clears it. */
     String editBlocklist(String mac) = 6;
@@ -25,4 +26,6 @@ interface IHotspotShell {
      *  The app passes the subscription: in this process SubscriptionManager has no telephony behind it. */
     long allowedTypes(int subId) = 9;
     String setAllowedTypes(int subId, long types) = 10;
+    /** Reports the system hotspot config's network through IHotspotEvents.onNetwork, changing nothing. */
+    String readNetwork() = 11;
 }

@@ -74,10 +74,10 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
      * hotspot config, keeping everything else. Quick settings then start the same network the Mac knows.
      */
     @Synchronized
-    override fun syncConfig(ssid: String?, pass: String?, autoOffMinutes: Int): String? = attempt {
+    override fun syncConfig(ssid: String?, pass: String?, autoOffMinutes: Int, compatible: Boolean): String? = attempt {
         val wm = wm!!
         val current = wm.call("getSoftApConfiguration") as SoftApConfiguration
-        val wanted = desiredConfig(current, ssid, pass, autoOffMinutes)
+        val wanted = desiredConfig(current, ssid, pass, autoOffMinutes, compatible)
         if (wanted != current) {
             require(wm.call("setSoftApConfiguration", wanted) == true) { "rejected by the system" }
             log("Hotspot config written: SSID ${ssidOf(wanted)}, auto-off ${autoOffMinutes.takeIf { it > 0 }?.let { "$it min" } ?: "never"}")
@@ -87,12 +87,18 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
     }
 
     @Synchronized
-    override fun startTethering(ssid: String, pass: String, autoOffMinutes: Int, withConfig: Boolean): String? = attempt {
+    override fun readNetwork(): String? = attempt {
+        val c = wm!!.call("getSoftApConfiguration") as SoftApConfiguration
+        events?.onNetwork(ssidOf(c), c.passphrase.orEmpty())
+    }
+
+    @Synchronized
+    override fun startTethering(ssid: String, pass: String, autoOffMinutes: Int, withConfig: Boolean, compatible: Boolean): String? = attempt {
         try {
             val request = TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI)
                 // Normally the system config already holds our SSID/passphrase (same as quick settings);
                 // if it could not be written, carry the config in the request.
-                .apply { if (withConfig && Build.VERSION.SDK_INT >= 36) setSoftApConfiguration(desiredConfig(null, ssid, pass, autoOffMinutes)) }
+                .apply { if (withConfig && Build.VERSION.SDK_INT >= 36) setSoftApConfiguration(desiredConfig(null, ssid, pass, autoOffMinutes, compatible)) }
                 .build()
             tm!!.startTethering(request, ctx.mainExecutor, object : TetheringManager.StartTetheringCallback {
                 override fun onTetheringStarted() = log("Tethering started")
@@ -156,15 +162,24 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
     }.onFailure { log("${cmd.joinToString(" ")} failed: $it") }.getOrDefault(-1)
 
     /** Our network (or, with ssid null, the one already set in Android) plus the settings Untether always owns. */
-    private fun desiredConfig(base: SoftApConfiguration?, ssid: String?, pass: String?, autoOffMinutes: Int): SoftApConfiguration {
+    private fun desiredConfig(
+        base: SoftApConfiguration?, ssid: String?, pass: String?, autoOffMinutes: Int, compatible: Boolean,
+    ): SoftApConfiguration {
         val b = base?.let { SoftApConfiguration.Builder::class.java.getConstructor(SoftApConfiguration::class.java).newInstance(it) }
             ?: SoftApConfiguration.Builder()
         if (ssid != null) {
             if (Build.VERSION.SDK_INT >= 33) b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray())) else b.call("setSsid", ssid)
-            b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
-                // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
-                // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
-                .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
+            if (compatible) {
+                // Some chips cannot hold a hotspot on a fixed 5 GHz channel next to their own Wi-Fi link, or
+                // offer WPA3 on it: let the system pick band and channel, WPA2.
+                b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
+                b.call("setBand", SoftApConfiguration.BAND_2GHZ or SoftApConfiguration.BAND_5GHZ) // hidden
+            } else {
+                b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
+                    // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
+                    // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
+                    .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
+            }
         }
         // Hidden setters. The default since Android 13 is a new random BSSID every session, which makes
         // macOS treat each session as a new network and scan for it; persistent keeps it per SSID.
