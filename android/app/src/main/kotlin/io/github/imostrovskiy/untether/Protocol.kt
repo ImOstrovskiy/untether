@@ -24,6 +24,7 @@ object Protocol {
     const val OP_SET_DATA_SIM = 0x07 // arg: subscription id, int32 big-endian
     const val OP_RECONNECT_DATA = 0x08
     const val OP_STOP_FIND_MAC = 0x09
+    const val OP_SET_NR = 0x0A // arg: 1 byte, 1 allows 5G, 0 keeps the data SIM on LTE and older
 
     const val ERR_REJECTED = 0x80
     const val ERR_UNKNOWN_OP = 0x81
@@ -83,7 +84,13 @@ data class Telemetry(
 data class Sim(val id: Int, val name: String)
 
 /** Things the service adds on top of the hotspot controller. */
-data class Extras(val blocked: Int = 0, val batteryMin: Int = 0, val ringing: Boolean = false, val findMac: Boolean = false)
+data class Extras(
+    val blocked: Int = 0,
+    val batteryMin: Int = 0,
+    val ringing: Boolean = false,
+    val findMac: Boolean = false,
+    val nr: Boolean? = null, // 5G allowed on the data SIM; null unknown
+)
 
 data class PhoneState(
     val hotspot: HotspotState,
@@ -123,6 +130,7 @@ data class PhoneState(
             telemetry.dataSim?.let { m["dsim"] = it }
             telemetry.wifi?.let { m["wifi"] = it }
             if (extras.findMac) m["fmac"] = true
+            extras.nr?.let { m["nr"] = if (it) 1 else 0 }
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes
             shown = shown.dropLast(1)

@@ -330,6 +330,16 @@ private fun DataCard(p: PhoneState) = Section(R.string.section_data) {
     } else {
         sims.firstOrNull()?.let { InfoRow(R.drawable.ic_sim_card, stringResource(R.string.data_sim), it.name) }
     }
+    p.extras.nr?.let { nr ->
+        InfoRow(
+            R.drawable.ic_signal_cellular_alt,
+            stringResource(R.string.nr),
+            stringResource(R.string.nr_body),
+            Modifier.toggleable(value = nr, enabled = p.shizuku == ShizukuStatus.OK, role = Role.Switch) {
+                HotspotService.start(ctx, HotspotService.ACTION_SET_NR) { putExtra(HotspotService.EXTRA_VALUE, it) }
+            },
+        ) { Switch(checked = nr, onCheckedChange = null, enabled = p.shizuku == ShizukuStatus.OK) }
+    }
     OutlinedButton(
         onClick = { HotspotService.start(ctx, HotspotService.ACTION_RECONNECT_DATA) },
         enabled = p.shizuku == ShizukuStatus.OK,

@@ -11,6 +11,7 @@ import android.net.MacAddress
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.telephony.SubscriptionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -37,6 +38,10 @@ class ShizukuHotspotController(
 
     private val _shizuku = MutableStateFlow(ShizukuStatus.NOT_RUNNING)
     val shizuku: StateFlow<ShizukuStatus> = _shizuku
+
+    /** Whether the mobile data SIM may use 5G; null while unknown. */
+    private val _nr = MutableStateFlow<Boolean?>(null)
+    val nr: StateFlow<Boolean?> = _nr
 
     /** Number of clients on the hotspot's blocklist. */
     private val _blocked = MutableStateFlow(0)
@@ -79,6 +84,7 @@ class ShizukuHotspotController(
             remote = shell
             if (call("Hotspot shell") { shell.open(events) }) onApState(shell.apState())
             syncConfig()
+            refreshNr()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -155,7 +161,15 @@ class ShizukuHotspotController(
 
     fun unblockAll() = call("Blocklist update") { remote!!.editBlocklist(null) }.also { AppLog.log("Blocklist cleared: $it") }
 
-    fun setDataSim(subId: Int) = call("Data SIM switch") { remote!!.setDataSim(subId) }
+    fun setDataSim(subId: Int) = call("Data SIM switch") { remote!!.setDataSim(subId) }.also { refreshNr() }
+
+    fun setNr(allowed: Boolean) = call("5G switch") { remote!!.setNr(SubscriptionManager.getDefaultDataSubscriptionId(), allowed) }
+        .also { refreshNr() }
+
+    fun refreshNr() {
+        _nr.value = runCatching { remote?.nrAllowed(SubscriptionManager.getDefaultDataSubscriptionId()) }.getOrNull()
+            ?.takeIf { it >= 0 }?.let { it == 1 }
+    }
 
     /** Runs a command as the shell user; null if Shizuku is not ready. Blocks. */
     fun exec(vararg cmd: String): Int? = remote?.let { runCatching { it.exec(arrayOf(*cmd)) }.getOrNull() }

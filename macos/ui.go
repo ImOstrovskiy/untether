@@ -10,6 +10,7 @@ void phtSetIcon(const void *png, int len, const char *title);
 void phtShowPopover(void);
 void phtFindSound(int on);
 void phtQuit(void);
+void phtSetQuickConnect(int on);
 char *phtLanguage(void);
 */
 import "C"
@@ -70,6 +71,13 @@ func uiSetIcon(png []byte, title string) {
 	C.phtSetIcon(unsafe.Pointer(&png[0]), C.int(len(png)), ct)
 }
 func uiShow() { C.phtShowPopover() }
+func uiSetQuickConnect(on bool) {
+	v := 0
+	if on {
+		v = 1
+	}
+	C.phtSetQuickConnect(C.int(v))
+}
 func uiQuit() { C.phtQuit() }
 
 func uiFindSound(on bool) {
@@ -102,8 +110,9 @@ type uiState struct {
 	Note     string  `json:"note"`
 	JoinTook float64 `json:"joinTook,omitempty"`
 	Settings struct {
-		Login   bool `json:"login"`
-		AutoOff bool `json:"autoOff"`
+		Login        bool `json:"login"`
+		AutoOff      bool `json:"autoOff"`
+		QuickConnect bool `json:"quickConnect"`
 	} `json:"settings"`
 	Phone *State `json:"phone"`
 }
@@ -117,6 +126,7 @@ func (a *app) render() {
 		Note: a.note, JoinTook: a.joinTook, Phone: a.state,
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
+	st.Settings.QuickConnect = a.cfg.QuickConnect
 	icon := menuIcon(a.state, a.busy)
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
@@ -155,6 +165,21 @@ func (a *app) handleAction(action, arg string) {
 		a.render()
 	case "toggle":
 		a.toggle()
+	case "quickToggle": // a click on the menu bar icon with quick connect on
+		a.setNote("")
+		a.toggle()
+		a.mu.Lock()
+		failed := a.note != ""
+		a.mu.Unlock()
+		if failed { // only a problem needs the window
+			uiShow()
+		}
+	case "nr":
+		allow := byte(0)
+		if arg == "1" {
+			allow = 1
+		}
+		a.send(opSetNR, []byte{allow}, "")
 	case "ring":
 		a.send(opRing, nil, "")
 	case "reconnectData":
@@ -177,9 +202,14 @@ func (a *app) handleAction(action, arg string) {
 			a.setNote("Launch at login: " + err.Error())
 		}
 		a.render()
-	case "autoOff":
+	case "autoOff", "quickConnect":
 		a.mu.Lock()
-		a.cfg.AutoOff = !a.cfg.AutoOff
+		if action == "autoOff" {
+			a.cfg.AutoOff = !a.cfg.AutoOff
+		} else {
+			a.cfg.QuickConnect = !a.cfg.QuickConnect
+			uiSetQuickConnect(a.cfg.QuickConnect)
+		}
 		err := a.cfg.save()
 		a.mu.Unlock()
 		if err != nil {

@@ -13,6 +13,7 @@ import android.net.wifi.WifiSsid
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.telephony.TelephonyManager
 import android.util.SparseIntArray
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -133,6 +134,27 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
         asInterface("com.android.internal.telephony.ISub", service("isub")).call("setDefaultDataSubId", subId)
     }
 
+    override fun setNr(subId: Int, allowed: Boolean): String? = attempt {
+        val current = telephony().callWithPkg("getAllowedNetworkTypesForReason", subId, REASON_USER) as Long
+        val nr = TelephonyManager.NETWORK_TYPE_BITMASK_NR
+        val wanted = if (allowed) current or nr else current and nr.inv()
+        require(telephony().callWithPkg("setAllowedNetworkTypesForReason", subId, REASON_USER, wanted) != false) { "rejected by the system" }
+        log("5G ${if (allowed) "allowed" else "off"} on SIM $subId")
+    }
+
+    override fun nrAllowed(subId: Int): Int = runCatching {
+        val types = telephony().callWithPkg("getAllowedNetworkTypesForReason", subId, REASON_USER) as Long
+        if (types and TelephonyManager.NETWORK_TYPE_BITMASK_NR != 0L) 1 else 0
+    }.getOrDefault(-1)
+
+    private fun telephony() = asInterface("com.android.internal.telephony.ITelephony", service("phone"))
+
+    /** ITelephony methods gained a trailing callingPackage on some versions; pass the shell's when asked. */
+    private fun Any.callWithPkg(name: String, vararg args: Any?): Any? {
+        val m = javaClass.methods.first { it.name == name && it.parameterCount in args.size..args.size + 1 }
+        return if (m.parameterCount == args.size) m.invoke(this, *args) else m.invoke(this, *args, SHELL_PACKAGE)
+    }
+
     override fun exec(cmd: Array<String>): Int = runCatching {
         ProcessBuilder(*cmd).redirectErrorStream(true).start().run {
             inputStream.readBytes()
@@ -206,6 +228,7 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
     private companion object {
         const val SHELL_PACKAGE = "com.android.shell"
         const val RANDOMIZATION_PERSISTENT = 1
+        const val REASON_USER = 0 // TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER
 
         fun service(name: String): IBinder =
             Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, name) as IBinder

@@ -16,7 +16,8 @@ import (
 )
 
 type config struct {
-	AutoOff bool `json:"auto_off"` // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
+	AutoOff      bool `json:"auto_off"`      // turn the hotspot off when the Mac sleeps or leaves its Wi-Fi
+	QuickConnect bool `json:"quick_connect"` // a click on the menu bar icon toggles the hotspot
 }
 
 type app struct {
@@ -53,6 +54,7 @@ func main() {
 
 // start runs once the status item exists.
 func (a *app) start() {
+	uiSetQuickConnect(a.cfg.QuickConnect)
 	a.render()
 	go func() {
 		for {

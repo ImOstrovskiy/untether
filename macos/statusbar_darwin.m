@@ -9,6 +9,7 @@ extern void goUIMessage(char *action, char *arg);
 extern void goUIStarted(void);
 
 static const CGFloat kWidth = 340;
+static BOOL quickConnect; // a plain click toggles the hotspot; right-, Option- or Control-click opens the popover
 
 @interface PHTController : NSObject <NSPopoverDelegate, WKScriptMessageHandler>
 @property(strong) NSStatusItem *item;
@@ -42,8 +43,19 @@ static const CGFloat kWidth = 340;
     NSApp.mainMenu = [NSMenu new];
     [NSApp.mainMenu addItem:appItem];
     self.item.button.target = self;
-    self.item.button.action = @selector(toggle:);
+    self.item.button.action = @selector(clicked:);
+    [self.item.button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
     self.item.button.toolTip = @"Untether";
+}
+
+- (void)clicked:(id)sender {
+    NSEvent *e = NSApp.currentEvent;
+    BOOL menu = e.type == NSEventTypeRightMouseUp || (e.modifierFlags & (NSEventModifierFlagOption | NSEventModifierFlagControl));
+    if (quickConnect && !menu && !self.popover.shown) {
+        goUIMessage((char *)"quickToggle", (char *)"");
+        return;
+    }
+    [self toggle:sender];
 }
 
 - (void)toggle:(id)sender {
@@ -118,6 +130,10 @@ void phtSetIcon(const void *png, int len, const char *title) {
         button.image = img;
         button.imagePosition = NSImageOnly;
     });
+}
+
+void phtSetQuickConnect(int on) {
+    dispatch_async(dispatch_get_main_queue(), ^{ quickConnect = on; });
 }
 
 void phtShowPopover(void) {
