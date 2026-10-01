@@ -21,6 +21,13 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev.$GITHUB_RUN_NUMBER"; fi
           echo "VERSION=$v" >> "$GITHUB_ENV"
+          # Releases count up with the version (0.2.3 -> 203), above any run number a test build used.
+          if [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          else
+            code=$GITHUB_RUN_NUMBER
+          fi
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v6
         with:
@@ -50,7 +57,7 @@ jobs:
 
       - name: Test and build
         working-directory: android
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease -PversionName="$VERSION" -PversionCode="$GITHUB_RUN_NUMBER"
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE"
 
       - name: Collect
         run: |
