@@ -28,10 +28,11 @@ object Protocol {
 
     /** Network modes of the mobile data SIM: the phone's own choice, or locked to one generation. */
     const val MODE_AUTO = 0
-    const val MODE_LTE = 1
-    const val MODE_3G = 2
-    const val MODE_2G = 3
-    const val MODE_OTHER = 4 // state only: set elsewhere
+    const val MODE_5G = 1 // 5G with LTE, which non-standalone 5G needs as its anchor
+    const val MODE_LTE = 2
+    const val MODE_3G = 3
+    const val MODE_2G = 4
+    const val MODE_OTHER = 5 // state only: set elsewhere
 
     const val ERR_REJECTED = 0x80
     const val ERR_UNKNOWN_OP = 0x81
@@ -91,12 +92,15 @@ data class Telemetry(
 data class Sim(val id: Int, val name: String)
 
 /** Things the service adds on top of the hotspot controller. */
+/** The mobile data SIM's network mode (Protocol.MODE_*), and whether 5G is on offer at all. */
+data class RadioMode(val mode: Int, val can5g: Boolean)
+
 data class Extras(
     val blocked: Int = 0,
     val batteryMin: Int = 0,
     val ringing: Boolean = false,
     val findMac: Boolean = false,
-    val mode: Int? = null, // the data SIM's network mode, Protocol.MODE_*; null unknown
+    val radio: RadioMode? = null, // null unknown
 )
 
 data class PhoneState(
@@ -137,7 +141,10 @@ data class PhoneState(
             telemetry.dataSim?.let { m["dsim"] = it }
             telemetry.wifi?.let { m["wifi"] = it }
             if (extras.findMac) m["fmac"] = true
-            extras.mode?.let { m["mode"] = it }
+            extras.radio?.let {
+                m["mode"] = it.mode
+                if (it.can5g) m["g5"] = true
+            }
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes
             shown = shown.dropLast(1)

@@ -157,7 +157,7 @@ class HotspotService : Service() {
         telemetry = TelemetryMonitor(this).also { it.open() }
         registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         openGatt()
-        val extras = combine(hotspot.blocked, settings, ringing, findMac, hotspot.mode) { b, s, r, f, m -> Extras(b, s.batteryMin, r, f, m) }
+        val extras = combine(hotspot.blocked, settings, ringing, findMac, hotspot.radio) { b, s, r, f, m -> Extras(b, s.batteryMin, r, f, m) }
         combine(hotspot.state, hotspot.clients, telemetry.telemetry, hotspot.shizuku, extras, ::PhoneState)
             .onEach(::publish)
             .launchIn(scope)

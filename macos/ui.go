@@ -175,7 +175,7 @@ func (a *app) handleAction(action, arg string) {
 			uiShow()
 		}
 	case "netMode":
-		if m, err := strconv.Atoi(arg); err == nil && m >= 0 && m <= 3 {
+		if m, err := strconv.Atoi(arg); err == nil && m >= 0 && m <= 4 {
 			a.send(opSetNetMode, []byte{byte(m)}, "")
 		}
 	case "ring":

@@ -379,7 +379,7 @@ function network(p) {
       <div class="hint">${esc((sims.find(s => s.id === p.dsim) || sims[0] || {}).n || "—")}</div></div></div>
     ${seg ? `<div style="padding-bottom:6px">${seg}</div>` : ""}
     ${p.mode != null ? `<div class="row">${icon("signal_cellular_alt")}<div class="grow"><div class="label">${t("netMode")}</div></div></div>
-    <div style="padding-bottom:6px"><div class="seg">${[[0, t("auto")], [1, "LTE"], [2, "3G"], [3, "2G"]].map(([m, l]) =>
+    <div style="padding-bottom:6px"><div class="seg">${[[0, t("auto")], ...(p.g5 ? [[1, "5G"]] : []), [2, "LTE"], [3, "3G"], [4, "2G"]].map(([m, l]) =>
       `<button class="${p.mode === m ? "on" : ""}" onclick="send('netMode', ${m})">${l}</button>`).join("")}</div></div>` : ""}
   </div>
   <h2>${t("quality")}</h2>
@@ -433,7 +433,7 @@ function demoState(kind) {
     lang: (navigator.language || "en").slice(0, 2), version: "0.2.0", paired: true, phoneName: "Pixel 9", busy: "", note: "",
     joinTook: 4.2, settings: { login: true, autoOff: false, quickConnect: false },
     phone: { hs: 0, ssid: "Untether-4F2A", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
-      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, mode: 0, blk: 0, bmin: 10 },
+      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, mode: 0, g5: true, blk: 0, bmin: 10 },
   };
   const p = base.phone;
   if (kind === "starting") { p.hs = 1; base.busy = ""; }
