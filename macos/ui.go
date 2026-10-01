@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -127,7 +128,7 @@ func (a *app) render() {
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
 	st.Settings.QuickConnect = a.cfg.QuickConnect
-	icon := menuIcon(a.state, a.busy)
+	icon := a.iconKey()
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
 
@@ -137,9 +138,36 @@ func (a *app) render() {
 		return
 	}
 	uiEval("window.render && render(" + string(b) + ")")
-	if icon != a.lastIcon {
-		uiSetIcon(hotspotIcon(icon), icon.label)
-		a.lastIcon = icon
+	a.showIcon(icon)
+}
+
+// iconKey is what the status item shows now. Needs a.mu.
+func (a *app) iconKey() iconKey {
+	k := menuIcon(a.state, a.busy)
+	k.dim = k.state == iconBusy && a.blinkOff
+	return k
+}
+
+// showIcon sets the status item unless it already shows k. Needs a.renderMu.
+func (a *app) showIcon(k iconKey) {
+	if k != a.lastIcon {
+		uiSetIcon(hotspotIcon(k), k.label)
+		a.lastIcon = k
+	}
+}
+
+// blink flashes the mark while the hotspot goes on or off: with quick connect and the popover
+// closed it is the only sign that something happens.
+func (a *app) blink() {
+	for range time.Tick(450 * time.Millisecond) {
+		a.renderMu.Lock()
+		a.mu.Lock()
+		busy := menuIcon(a.state, a.busy).state == iconBusy
+		a.blinkOff = busy && !a.blinkOff
+		k := a.iconKey()
+		a.mu.Unlock()
+		a.showIcon(k)
+		a.renderMu.Unlock()
 	}
 }
 

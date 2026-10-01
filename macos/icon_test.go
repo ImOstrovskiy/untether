@@ -52,12 +52,12 @@ func TestMenuIcon(t *testing.T) {
 		busy string
 		want iconKey
 	}{
-		{nil, "", iconKey{iconDisconnected, -1, true, ""}},
-		{lte, "", iconKey{iconOff, -1, true, ""}},
-		{broken, "", iconKey{iconError, -1, true, ""}},
-		{on, "", iconKey{iconOn, 4, false, "5G"}},
-		{on, "@turningOff", iconKey{iconBusy, -1, true, ""}},
-		{wifi, "", iconKey{iconOn, 3, false, "Wi-Fi"}},
+		{nil, "", iconKey{state: iconDisconnected, bars: -1, mark: true, label: ""}},
+		{lte, "", iconKey{state: iconOff, bars: -1, mark: true, label: ""}},
+		{broken, "", iconKey{state: iconError, bars: -1, mark: true, label: ""}},
+		{on, "", iconKey{state: iconOn, bars: 4, mark: false, label: "5G"}},
+		{on, "@turningOff", iconKey{state: iconBusy, bars: -1, mark: true, label: ""}},
+		{wifi, "", iconKey{state: iconOn, bars: 3, mark: false, label: "Wi-Fi"}},
 	} {
 		if got := menuIcon(c.st, c.busy); got != c.want {
 			t.Errorf("menuIcon(%+v, %q) = %+v, want %+v", c.st, c.busy, got, c.want)

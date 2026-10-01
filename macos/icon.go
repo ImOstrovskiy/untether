@@ -102,6 +102,9 @@ func hotspotIcon(k iconKey) []byte {
 			parts = append(parts, segment(4.4, 7, 7.6, 10.2, 1), segment(7.6, 7, 4.4, 10.2, 1))
 		}
 		width, left = 24, 22.3 // the gap after the hook matches the one before the label
+		if k.dim {
+			alpha = 0.35
+		}
 	}
 	if k.bars >= 0 {
 		// After the iPhone status bar: bars 0.23 of the glyph height wide with 0.21 gaps, rising from
@@ -159,6 +162,7 @@ type iconKey struct {
 	state, bars int // bars < 0: none
 	mark        bool
 	label       string
+	dim         bool // the off half of the busy blink
 }
 
 // menuIcon is what the status item shows: the app's mark, grey without the phone, until the

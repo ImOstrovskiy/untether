@@ -37,6 +37,7 @@ type app struct {
 	joinTook float64 // seconds from click to joined, last time
 	finding  bool    // the phone asked this Mac to play a sound
 	lastIcon iconKey // status item icon currently shown
+	blinkOff bool    // the busy mark is in the dim half of its blink
 }
 
 func main() {
@@ -55,6 +56,7 @@ func main() {
 // start runs once the status item exists.
 func (a *app) start() {
 	uiSetQuickConnect(a.cfg.QuickConnect)
+	go a.blink()
 	a.render()
 	go func() {
 		for {
