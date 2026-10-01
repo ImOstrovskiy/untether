@@ -47,6 +47,7 @@ func TestMenuIcon(t *testing.T) {
 	broken := &State{Net: 2, Sig: 3, HS: hsOff, Shz: shzOK + 1}
 	three := 3
 	wifi := &State{Net: 2, Sig: 1, HS: hsOn, Shz: shzOK, WiFi: &three}
+	edge := &State{Net: 5, Sig: 2, HS: hsOn, Shz: shzOK}
 	for _, c := range []struct {
 		st   *State
 		busy string
@@ -58,6 +59,7 @@ func TestMenuIcon(t *testing.T) {
 		{on, "", iconKey{state: iconOn, bars: 4, mark: false, label: "5G"}},
 		{on, "@turningOff", iconKey{state: iconBusy, bars: -1, mark: true, label: ""}},
 		{wifi, "", iconKey{state: iconOn, bars: 3, mark: false, label: "Wi-Fi"}},
+		{edge, "", iconKey{state: iconOn, bars: 2, mark: false, label: "2G"}},
 	} {
 		if got := menuIcon(c.st, c.busy); got != c.want {
 			t.Errorf("menuIcon(%+v, %q) = %+v, want %+v", c.st, c.busy, got, c.want)

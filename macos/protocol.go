@@ -73,6 +73,9 @@ type State struct {
 	Operator string `cbor:"op,omitempty" json:"op,omitempty"`
 	RSRP     *int   `cbor:"rsrp,omitempty" json:"rsrp,omitempty"`
 	SNR      *int   `cbor:"snr,omitempty" json:"snr,omitempty"`
+	RSCP     *int   `cbor:"rscp,omitempty" json:"rscp,omitempty"` // 3G
+	EcNo     *int   `cbor:"ecno,omitempty" json:"ecno,omitempty"` // 3G
+	RSSI     *int   `cbor:"rssi,omitempty" json:"rssi,omitempty"` // 2G
 	Blocked  int    `cbor:"blk,omitempty" json:"blk,omitempty"`
 	BatMin   int    `cbor:"bmin,omitempty" json:"bmin,omitempty"`
 	Ringing  bool   `cbor:"ring,omitempty" json:"ring,omitempty"`

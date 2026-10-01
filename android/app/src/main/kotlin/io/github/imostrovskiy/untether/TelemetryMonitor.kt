@@ -11,8 +11,11 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.telephony.CellInfo
+import android.telephony.CellSignalStrengthGsm
 import android.telephony.CellSignalStrengthLte
 import android.telephony.CellSignalStrengthNr
+import android.telephony.CellSignalStrengthTdscdma
+import android.telephony.CellSignalStrengthWcdma
 import android.telephony.SignalStrength
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyCallback
@@ -44,15 +47,26 @@ class TelemetryMonitor(private val ctx: Context) {
         TelephonyCallback.SignalStrengthsListener {
         override fun onDisplayInfoChanged(d: TelephonyDisplayInfo) = _telemetry.update { it.copy(net = netCode(d)) }
         override fun onSignalStrengthsChanged(s: SignalStrength) = _telemetry.update { t ->
-            // Prefer 5G numbers when the phone reports both (NSA).
+            // The serving cell's own measures, whatever the generation; with 5G NSA both NR and LTE
+            // report, and 5G wins.
             val cells = s.cellSignalStrengths
-            val nr = cells.filterIsInstance<CellSignalStrengthNr>().firstOrNull()
-            val lte = cells.filterIsInstance<CellSignalStrengthLte>().firstOrNull()
+            fun <T> cell(c: Class<T>) = cells.filterIsInstance(c).firstOrNull()
+            val nr = cell(CellSignalStrengthNr::class.java)
+            val lte = cell(CellSignalStrengthLte::class.java)
+            val wcdma = cell(CellSignalStrengthWcdma::class.java)
+            val td = cell(CellSignalStrengthTdscdma::class.java)
+            val gsm = cell(CellSignalStrengthGsm::class.java)
+            fun valid(vararg v: Int?) = v.firstOrNull { it != null && it != CellInfo.UNAVAILABLE }
+            val rsrp = valid(nr?.ssRsrp, lte?.rsrp)
+            val rscp = if (rsrp == null) valid(wcdma?.dbm, td?.rscp) else null // WCDMA's dBm is its RSCP
             t.copy(
                 signal = s.level,
                 operator = telephony.networkOperatorName.ifBlank { null },
-                rsrp = listOfNotNull(nr?.ssRsrp, lte?.rsrp).firstOrNull { it != CellInfo.UNAVAILABLE },
-                snr = listOfNotNull(nr?.ssSinr, lte?.rssnr).firstOrNull { it != CellInfo.UNAVAILABLE },
+                rsrp = rsrp,
+                snr = if (rsrp != null) valid(nr?.ssSinr, lte?.rssnr) else null,
+                rscp = rscp,
+                ecno = if (rscp != null) valid(wcdma?.ecNo) else null,
+                rssi = if (rsrp == null && rscp == null) valid(gsm?.rssi) else null,
             )
         }
     }
@@ -116,6 +130,10 @@ class TelemetryMonitor(private val ctx: Context) {
         d.networkType == TelephonyManager.NETWORK_TYPE_LTE -> 2
         d.networkType == TelephonyManager.NETWORK_TYPE_UNKNOWN ||
             d.networkType == TelephonyManager.NETWORK_TYPE_IWLAN -> 0
+        d.networkType in setOf(
+            TelephonyManager.NETWORK_TYPE_GSM, TelephonyManager.NETWORK_TYPE_GPRS, TelephonyManager.NETWORK_TYPE_EDGE,
+            TelephonyManager.NETWORK_TYPE_CDMA, TelephonyManager.NETWORK_TYPE_1xRTT, TelephonyManager.NETWORK_TYPE_IDEN,
+        ) -> 5
         else -> 1
     }
 }

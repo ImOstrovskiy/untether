@@ -178,8 +178,8 @@ func menuIcon(st *State, busy string) iconKey {
 		k.bars, k.label = min(max(*st.WiFi, 0), 4), "Wi-Fi"
 	default:
 		k.bars = min(max(st.Sig, 0), 4)
-		if st.Net >= 1 && st.Net <= 4 {
-			k.label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
+		if st.Net >= 1 && st.Net <= 5 {
+			k.label = [...]string{"3G", "LTE", "5G", "5G", "2G"}[st.Net-1]
 		}
 	}
 	return k

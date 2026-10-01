@@ -295,12 +295,17 @@ private fun PhoneCard(t: Telemetry) = Section(R.string.section_phone) {
             stringResource(if (it >= HOT_C) R.string.temperature_hot else R.string.temperature_value, it),
         )
     }
-    val net = listOf(stringResource(R.string.net_none), "3G", "LTE", "5G NSA", "5G SA").getOrElse(t.net) { "?" }
+    val net = listOf(stringResource(R.string.net_none), "3G", "LTE", "5G NSA", "5G SA", "2G").getOrElse(t.net) { "?" }
     InfoRow(R.drawable.ic_cell_tower, stringResource(R.string.network), listOfNotNull(t.operator, net).joinToString(" · "))
     InfoRow(
         R.drawable.ic_signal_cellular_alt,
         stringResource(R.string.signal),
-        listOfNotNull(stringResource(R.string.signal_value, t.signal), t.rsrp?.let { "$it dBm" }, t.snr?.let { "SINR $it dB" })
+        listOfNotNull(
+            stringResource(R.string.signal_value, t.signal),
+            t.rsrp?.let { "RSRP $it dBm" }, t.snr?.let { "SINR $it dB" },
+            t.rscp?.let { "RSCP $it dBm" }, t.ecno?.let { "Ec/No $it dB" },
+            t.rssi?.let { "RSSI $it dBm" },
+        )
             .joinToString(" · "),
     )
 }

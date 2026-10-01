@@ -106,7 +106,7 @@ within 5 s, or after 150 s without state, it reconnects.
 | `ncl` | uint | total number of clients (`cl` may be cut to fit 512 bytes) |
 | `bat` | uint | battery % 0–100 |
 | `chg` | bool | charging |
-| `net` | uint | cellular: 0 none, 1 3G (or older), 2 LTE, 3 5G NSA, 4 5G SA |
+| `net` | uint | cellular: 0 none, 1 3G (or older before v1.1), 2 LTE, 3 5G NSA, 4 5G SA, 5 2G *(v1.1)* |
 | `sig` | uint | signal level 0–4 |
 | `shz` | uint | Shizuku: 0 ok, 1 not running, 2 no permission |
 | `op` | tstr | mobile operator name *(v1.1, optional)* |
@@ -122,6 +122,9 @@ within 5 s, or after 150 s without state, it reconnects.
 | `wifi` | uint | 0–4, present while the phone's own internet is Wi-Fi, which the hotspot then shares *(v1.1, optional)* |
 | `mode` | uint | the mobile data SIM's network mode as in `0x0A`, or `5` when set elsewhere; absent while unknown *(v1.1, optional)* |
 | `g5` | bool | 5G is on offer: the SIM allows NR on its own; present when true *(v1.1)* |
+| `rscp` | int | 3G received signal code power, dBm *(v1.1, optional)* |
+| `ecno` | int | 3G Ec/No, dB *(v1.1, optional)* |
+| `rssi` | int | 2G received signal strength, dBm *(v1.1, optional)* |
 | `bye` | bool | sent alone with `v` as the last notification when the user stops Untether on the phone; the Mac drops the link *(v1.1)* |
 
 Readers must ignore unknown keys.

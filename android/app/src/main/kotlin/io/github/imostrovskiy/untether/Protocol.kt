@@ -74,7 +74,10 @@ data class Client(val mac: String, val ip: String?, val name: String?)
 /** A hotspot network the Mac joins; pass is empty for an open network. */
 data class HotspotNetwork(val ssid: String, val pass: String)
 
-/** `net`: 0 none, 1 3G or older, 2 LTE, 3 5G NSA, 4 5G SA. `signal`: 0–4. `rsrp` dBm, `snr` dB. */
+/**
+ * `net`: 0 none, 1 3G, 2 LTE, 3 5G NSA, 4 5G SA, 5 2G. `signal`: 0–4. The serving cell's measures:
+ * `rsrp` dBm and `snr` (SINR) dB on 5G and LTE, `rscp` dBm and `ecno` dB on 3G, `rssi` dBm on 2G.
+ */
 data class Telemetry(
     val battery: Int = 0,
     val charging: Boolean = false,
@@ -83,6 +86,9 @@ data class Telemetry(
     val operator: String? = null,
     val rsrp: Int? = null,
     val snr: Int? = null,
+    val rscp: Int? = null,
+    val ecno: Int? = null,
+    val rssi: Int? = null,
     val temperature: Int? = null, // battery, °C
     val sims: List<Sim> = emptyList(), // active subscriptions
     val dataSim: Int? = null, // subscription id used for mobile data
@@ -133,6 +139,9 @@ data class PhoneState(
             telemetry.operator?.let { m["op"] = it }
             telemetry.rsrp?.let { m["rsrp"] = it }
             telemetry.snr?.let { m["snr"] = it }
+            telemetry.rscp?.let { m["rscp"] = it }
+            telemetry.ecno?.let { m["ecno"] = it }
+            telemetry.rssi?.let { m["rssi"] = it }
             if (extras.blocked > 0) m["blk"] = extras.blocked
             if (extras.batteryMin > 0) m["bmin"] = extras.batteryMin
             if (extras.ringing) m["ring"] = true
