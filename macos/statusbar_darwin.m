@@ -34,6 +34,13 @@ static const CGFloat kWidth = 340;
     self.popover.animates = YES;
 
     self.item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    // A menu bar app shows no main menu, but its key equivalents still work while the popover is key.
+    NSMenu *appMenu = [NSMenu new];
+    [appMenu addItemWithTitle:@"Quit Untether" action:@selector(terminate:) keyEquivalent:@"q"];
+    NSMenuItem *appItem = [NSMenuItem new];
+    appItem.submenu = appMenu;
+    NSApp.mainMenu = [NSMenu new];
+    [NSApp.mainMenu addItem:appItem];
     self.item.button.target = self;
     self.item.button.action = @selector(toggle:);
     self.item.button.toolTip = @"Untether";
