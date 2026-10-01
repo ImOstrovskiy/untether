@@ -35,6 +35,11 @@ android {
         }
     }
     buildFeatures { compose = true }
+    // No Google-encrypted dependency list in the APK: it is opaque to everyone else (F-Droid rejects it).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 dependencies {
