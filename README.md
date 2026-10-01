@@ -90,7 +90,10 @@ Download `Untether-<version>.apk` and `Untether-<version>.dmg` from
 [Releases](https://github.com/ImOstrovskiy/untether/releases/latest).
 
 **Phone.** Install the APK (allow installs from your browser or file manager), open Untether, grant
-the permissions, allow it in Shizuku and let it ignore battery optimization.
+the permissions, allow it in Shizuku and let it ignore battery optimization. Play Protect may block
+the install because the app comes from outside Google Play and talks to hidden system APIs through
+Shizuku; tap **Install anyway**. The source is all here, and the release is built by
+[CI](.github/workflows/build.yml) from it.
 
 **Mac.** Open the DMG and drag Untether to Applications. The app is signed with a self-signed
 certificate, not notarized, so the first launch needs a right-click → **Open** (or
