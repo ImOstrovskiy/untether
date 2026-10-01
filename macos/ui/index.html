@@ -483,7 +483,7 @@ if (bridge) {
   bridge.postMessage({ action: "ready", arg: "" });
 } else {
   document.body.classList.add("demo");
-  // Demo URL options: ?state=on|off|starting|shizuku|find|unpaired &tab=overview|network|devices|settings &lang=en|uk &net=3g|2g &shot
+  // Demo URL options: ?state=on|off|starting|shizuku|find|unpaired &tab=overview|network|devices|settings &lang=en|uk &net=3g|2g &update=0.2.4 &shot
   const q = new URLSearchParams(location.search);
   if (q.has("shot")) document.body.classList.add("shot");
   if (q.get("tab")) tab = q.get("tab");
@@ -492,6 +492,7 @@ if (bridge) {
   const st = Object.assign(demoState(demoKind), q.get("lang") ? { lang: q.get("lang") } : {});
   const radio = { "3g": { net: 1, rscp: -81, ecno: -6, mode: 3 }, "2g": { net: 5, rssi: -73, mode: 4 } }[q.get("net")];
   if (radio && st.phone) { delete st.phone.rsrp; delete st.phone.snr; Object.assign(st.phone, radio); }
+  if (q.get("update")) st.update = { version: q.get("update") };
   render(st);
 }
 </script>
