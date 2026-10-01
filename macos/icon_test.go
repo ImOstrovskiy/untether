@@ -27,7 +27,6 @@ func TestSignalIcon(t *testing.T) {
 		{iconKey{state: iconOn, bars: -1, mark: true}, 36},
 		{iconKey{state: iconOn, bars: 2, mark: true}, 68},
 		{iconKey{state: iconOn, bars: 2}, 36},
-		{iconKey{state: iconOn, bars: 2, wifi: true}, 32},
 	} {
 		if w := decode(t, hotspotIcon(c.k)).Bounds().Dx(); w != c.width {
 			t.Errorf("%+v: width %d, want %d", c.k, w, c.width)
@@ -53,14 +52,14 @@ func TestMenuIcon(t *testing.T) {
 		style string
 		want  iconKey
 	}{
-		{nil, menuBoth, iconKey{iconDisconnected, -1, false, true, ""}},
-		{lte, menuBoth, iconKey{iconOff, 3, false, true, "LTE"}},
-		{lte, menuSignal, iconKey{iconOff, 3, false, false, "LTE"}},
-		{broken, menuSignal, iconKey{iconError, 3, false, true, "LTE"}},
-		{lte, menuWhenOn, iconKey{iconOff, -1, false, true, ""}},
-		{on, menuWhenOn, iconKey{iconOn, 4, false, false, "5G"}},
-		{on, menuMark, iconKey{iconOn, -1, false, true, ""}},
-		{wifi, menuBoth, iconKey{iconOn, 3, true, true, ""}},
+		{nil, menuBoth, iconKey{iconDisconnected, -1, true, ""}},
+		{lte, menuBoth, iconKey{iconOff, 3, true, "LTE"}},
+		{lte, menuSignal, iconKey{iconOff, 3, false, "LTE"}},
+		{broken, menuSignal, iconKey{iconError, 3, true, "LTE"}},
+		{lte, menuWhenOn, iconKey{iconOff, -1, true, ""}},
+		{on, menuWhenOn, iconKey{iconOn, 4, false, "5G"}},
+		{on, menuMark, iconKey{iconOn, -1, true, ""}},
+		{wifi, menuBoth, iconKey{iconOn, 3, true, "Wi-Fi"}},
 	} {
 		if got := menuIcon(c.st, "", c.style); got != c.want {
 			t.Errorf("menuIcon(%+v, %q) = %+v, want %+v", c.st, c.style, got, c.want)

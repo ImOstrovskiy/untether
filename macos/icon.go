@@ -57,16 +57,6 @@ func disc(cx, cy, r float64) shape {
 	return func(x, y float64) float64 { return math.Hypot(x-cx, y-cy) - r }
 }
 
-// sector is a pie slice from a0 to a1 degrees, clockwise on screen.
-func sector(cx, cy, r, a0, a1 float64) shape {
-	return func(x, y float64) float64 {
-		if a := math.Mod(math.Atan2(y-cy, x-cx)*180/math.Pi+360, 360); a < a0 || a > a1 {
-			return 1
-		}
-		return math.Hypot(x-cx, y-cy) - r
-	}
-}
-
 func ring(cx, cy, r, hw float64) shape {
 	return func(x, y float64) float64 { return math.Abs(math.Hypot(x-cx, y-cy)-r) - hw }
 }
@@ -86,7 +76,7 @@ const (
 )
 
 // hotspotIcon draws the template image (18 pt high @2x) for k: the mark for a state, then the
-// phone's signal, cellular bars or the Wi-Fi fan, unlit parts dimmed. At least one of the two.
+// phone's signal bars, unlit bars dimmed. At least one of the two.
 func hotspotIcon(k iconKey) []byte {
 	var parts, dim []shape
 	width, left, alpha := 0.0, 0.5, 1.0
@@ -113,20 +103,9 @@ func hotspotIcon(k iconKey) []byte {
 		}
 		width, left = 24, 22.3 // the gap after the hook matches the one before the label
 	}
-	switch {
-	case k.bars >= 0 && k.wifi:
-		// The macOS Wi-Fi fan, measured off the system icon: a wedge and two bands. Level 1 lights the
-		// wedge, each step a band more.
-		const s = glyphScale
-		cx, cy := left+11.8*s, glyphBase-0.4*s
-		lit(k.bars >= 1, sector(cx, cy, 5.9*s, 228, 312))
-		for i, r := range []float64{9.5, 14.9} {
-			lit(k.bars >= i+2, arc(cx, cy, r*s, 228, 312, 1.8*s))
-		}
-		width = left + 23.6*s + 0.5
-	case k.bars >= 0:
-		// After the iPhone status bar: the tallest bar as tall as the Wi-Fi icon, bars 0.23 of that
-		// wide with 0.21 gaps, rising from 30 % in equal steps.
+	if k.bars >= 0 {
+		// After the iPhone status bar: bars 0.23 of the glyph height wide with 0.21 gaps, rising from
+		// 30 % to full height in equal steps.
 		const h = glyphBase - glyphTop
 		const w, gap = 0.23 * h, 0.21 * h
 		for i := range 4 {
@@ -185,8 +164,7 @@ const (
 
 // iconKey is everything the status item shows.
 type iconKey struct {
-	state, bars int  // bars < 0: none
-	wifi        bool // bars is the phone's own Wi-Fi level, not cellular
+	state, bars int // bars < 0: none
 	mark        bool
 	label       string
 }
@@ -200,7 +178,7 @@ func menuIcon(st *State, busy, style string) iconKey {
 	}
 	switch {
 	case st.WiFi != nil: // the phone itself is on Wi-Fi, and the hotspot shares it
-		k.bars, k.wifi = min(max(*st.WiFi, 0), 4), true
+		k.bars, k.label = min(max(*st.WiFi, 0), 4), "Wi-Fi"
 	default:
 		k.bars = min(max(st.Sig, 0), 4)
 		if st.Net >= 1 && st.Net <= 4 {
