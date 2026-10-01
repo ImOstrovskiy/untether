@@ -93,16 +93,17 @@ func (p *Phone) Run() {
 // watchdog probes a link that went quiet and drops one that stays silent; Run then reconnects.
 func (p *Phone) watchdog() {
 	for range time.Tick(5 * time.Second) {
-		quiet := time.Since(time.UnixMilli(p.lastState.Load()))
 		p.mu.Lock()
-		live := p.dev != nil
-		if live && quiet > silenceLimit {
-			slog.Warn("watchdog: no state from the phone, reconnecting")
-			_ = p.dev.Disconnect()
-		}
+		dev := p.dev // a session sets lastState before dev, so a fresh one never looks quiet
+		quiet := time.Since(time.UnixMilli(p.lastState.Load()))
 		p.mu.Unlock()
-		if live && quiet > quietLimit && p.probing.CompareAndSwap(false, true) {
-			go p.probe()
+		switch {
+		case dev == nil:
+		case quiet > silenceLimit:
+			slog.Warn("watchdog: no state from the phone, reconnecting")
+			p.drop(dev)
+		case quiet > quietLimit && p.probing.CompareAndSwap(false, true):
+			go p.probe(dev)
 		}
 	}
 }
@@ -110,13 +111,13 @@ func (p *Phone) watchdog() {
 // probe re-reads the state and subscribes again. After the phone app restarts (an update), the link
 // and even the handles can outlive its GATT server while the subscription does not; in Doze a late
 // heartbeat just gets read early. Anything failing drops the link, and Run reconnects.
-func (p *Phone) probe() {
+func (p *Phone) probe(dev *bluetooth.Device) {
 	defer p.probing.Store(false)
 	p.mu.Lock()
 	ch, ok := p.chars[stateUUID]
-	dev := p.dev
+	same := p.dev == dev
 	p.mu.Unlock()
-	if !ok || dev == nil {
+	if !ok || !same {
 		return
 	}
 	got := make(chan []byte, 1)
@@ -137,7 +138,7 @@ func (p *Phone) probe() {
 	}
 	if err != nil {
 		slog.Warn("phone went quiet and does not answer, reconnecting", "err", err)
-		_ = dev.Disconnect()
+		p.drop(dev)
 		return
 	}
 	slog.Info("phone was quiet; read its state and subscribed again")
@@ -315,8 +316,29 @@ func (p *Phone) read(ch bluetooth.DeviceCharacteristic) ([]byte, error) {
 func (p *Phone) dropIfStale(err error) {
 	if p.dev != nil && strings.Contains(err.Error(), "timeout") {
 		slog.Warn("GATT timeout, reconnecting", "err", err)
-		_ = p.dev.Disconnect()
+		p.drop(p.dev)
 	}
+}
+
+// drop ends the session on dev. CoreBluetooth reports the disconnect, which ends it, except when it
+// already considers the peripheral gone; then the session would wait forever, so end it ourselves.
+func (p *Phone) drop(dev *bluetooth.Device) {
+	p.linkMu.Lock()
+	lost := p.lost
+	p.linkMu.Unlock()
+	_ = dev.Disconnect()
+	if lost == nil {
+		return
+	}
+	time.AfterFunc(3*time.Second, func() {
+		p.linkMu.Lock()
+		defer p.linkMu.Unlock()
+		if p.lost == lost { // still that session, not a new one
+			slog.Warn("no disconnect event, ending the session")
+			close(lost)
+			p.lost = nil
+		}
+	})
 }
 
 func (p *Phone) handleState(b []byte) {
@@ -333,7 +355,7 @@ func (p *Phone) handleState(b []byte) {
 		slog.Info("Untether was stopped on the phone")
 		p.mu.Lock()
 		if p.dev != nil {
-			_ = p.dev.Disconnect()
+			p.drop(p.dev)
 		}
 		p.mu.Unlock()
 		return
