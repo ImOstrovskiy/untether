@@ -61,11 +61,11 @@ func ring(cx, cy, r, hw float64) shape {
 	return func(x, y float64) float64 { return math.Abs(math.Hypot(x-cx, y-cy)-r) - hw }
 }
 
-// The Untether mark: a hook (the U) and the dot that got off it.
+// The Untether mark: a hook (the U) and the dot that got off it, centered on y = 12 like the bars.
 var hook = []shape{
-	segment(16, 3.5, 16, 13.5, 1),
-	arc(11, 13.5, 5, 0, 180, 1),
-	segment(6, 13.5, 6, 12.5, 1),
+	segment(16, 4.5, 16, 14.5, 1),
+	arc(11, 14.5, 5, 0, 180, 1),
+	segment(6, 14.5, 6, 13.5, 1),
 }
 
 // hotspotIcon draws the template image (18 pt high @2x) for a state. With bars 0–4 the phone's
@@ -90,15 +90,15 @@ func hotspotIcon(state, bars int) []byte {
 	alpha := 1.0
 	switch state {
 	case iconDisconnected:
-		parts, alpha = append(parts, ring(6, 7.6, 1.5, 1)), 0.35
+		parts, alpha = append(parts, ring(6, 8.6, 1.5, 1)), 0.35
 	case iconOff:
-		parts = append(parts, ring(6, 7.6, 1.5, 1))
+		parts = append(parts, ring(6, 8.6, 1.5, 1))
 	case iconBusy:
-		parts = append(parts, disc(6, 7.6, 1.9))
+		parts = append(parts, disc(6, 8.6, 1.9))
 	case iconOn:
-		parts = append(parts, disc(6, 7.6, 1.9), arc(6, 7.6, 4.3, 215, 305, 1))
+		parts = append(parts, disc(6, 8.6, 1.9), arc(6, 8.6, 4.3, 215, 305, 1))
 	case iconError:
-		parts = append(parts, segment(4.4, 6, 7.6, 9.2, 1), segment(7.6, 6, 4.4, 9.2, 1))
+		parts = append(parts, segment(4.4, 7, 7.6, 10.2, 1), segment(7.6, 7, 4.4, 10.2, 1))
 	}
 	return rasterize(parts, dim, width, alpha)
 }
