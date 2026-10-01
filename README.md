@@ -27,12 +27,16 @@
 ## What it does
 
 - **One click, online.** The Mac asks the phone to start its hotspot and joins it straight away,
-  without a Wi-Fi scan: about 4–5 s from click to internet.
-- **The phone at a glance.** Battery and temperature, operator, network type (LTE, 5G NSA/SA),
-  RSRP and SINR with live graphs, and the devices on the hotspot. Signal bars and the network type
-  sit right next to the menu bar icon.
-- **Control from the Mac.** Choose the SIM for mobile data, reconnect mobile data when it hangs,
-  block a device on the hotspot, ring the phone when it is lost in the sofa.
+  without a Wi-Fi scan: about 4–5 s from click to internet. With Quick connect the click on the menu
+  bar icon itself does it.
+- **The menu bar tells it all.** A grey mark without the phone, the mark while the hotspot is off,
+  and the phone's signal bars with the network type (5G, LTE, 3G, 2G, or Wi-Fi when the phone
+  shares its own Wi-Fi) while it is on.
+- **The phone at a glance.** Battery and temperature, operator, network type, signal (RSRP and
+  SINR, RSCP and Ec/No on 3G, RSSI on 2G) with live graphs, and the devices on the hotspot.
+- **Control from the Mac.** Choose the SIM for mobile data and the network mode (auto, 5G, LTE, 3G,
+  2G), reconnect mobile data when it hangs, block a device on the hotspot, ring the phone when it is
+  lost in the sofa.
 - **And back.** The phone can ring the Mac.
 - **Your network or Untether's.** By default the hotspot gets its own name and password; one switch
   keeps the ones set in Android instead.
