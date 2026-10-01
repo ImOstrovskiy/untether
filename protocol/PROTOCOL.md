@@ -116,6 +116,7 @@ treats 150 s without state on a live link as a dead link and reconnects.
 | `bmin` | uint | battery-guard threshold %, present when enabled *(v1.1)* |
 | `ring` | bool | find-my-phone is ringing, present when true *(v1.1)* |
 | `fmac` | bool | the phone asks the Mac to play a sound, present when true *(v1.1)* |
+| `wifi` | uint | 0–4, present while the phone's own internet is Wi-Fi, which the hotspot then shares *(v1.1, optional)* |
 
 Readers must ignore unknown keys.
 

@@ -349,13 +349,14 @@ function alerts(p) {
 
 function overview(p) {
   if (!p) return `<div class="card"><div class="empty">${t(S.paired ? "searching" : "notPaired")}</div></div>`;
-  const bars = `<span class="bars">${[4, 7, 10, 12].map((h, i) => `<i class="${i < p.sig ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`;
+  const lvl = p.wifi ?? p.sig; // the phone's own Wi-Fi when it is on one: that is what the hotspot shares
+  const bars = `<span class="bars">${[4, 7, 10, 12].map((h, i) => `<i class="${i < lvl ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`;
   return `
   <h2>${t("phone")}</h2>
   <div class="tiles">
     <div class="tile"><div class="k">${icon(p.chg ? "battery_charging_full" : "battery_full")}${t("battery")}</div><div class="v">${p.bat}<small>%</small></div></div>
     <div class="tile ${p.temp >= HOT_C ? "hot" : ""}"><div class="k">${icon("thermostat")}${t("temp")}</div><div class="v">${p.temp ?? "—"}<small>°C</small></div></div>
-    <div class="tile"><div class="k">${icon("signal_cellular_alt")}${t("signal")}</div><div class="v">${NET[p.net] || "—"}${bars}</div></div>
+    <div class="tile"><div class="k">${icon("signal_cellular_alt")}${t("signal")}</div><div class="v">${p.wifi != null ? "Wi-Fi" : NET[p.net] || "—"}${bars}</div></div>
   </div>
   <h2>${t("history")}</h2>
   <div class="card">

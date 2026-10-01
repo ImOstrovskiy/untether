@@ -79,6 +79,7 @@ type State struct {
 	Sims     []Sim  `cbor:"sims,omitempty" json:"sims,omitempty"`
 	DataSim  *int   `cbor:"dsim,omitempty" json:"dsim,omitempty"`
 	FindMac  bool   `cbor:"fmac,omitempty" json:"fmac,omitempty"`
+	WiFi     *int   `cbor:"wifi,omitempty" json:"wifi,omitempty"` // 0–4 while the phone's own internet is Wi-Fi
 }
 
 type Sim struct {

@@ -57,6 +57,16 @@ func disc(cx, cy, r float64) shape {
 	return func(x, y float64) float64 { return math.Hypot(x-cx, y-cy) - r }
 }
 
+// sector is a pie slice from a0 to a1 degrees, clockwise on screen.
+func sector(cx, cy, r, a0, a1 float64) shape {
+	return func(x, y float64) float64 {
+		if a := math.Mod(math.Atan2(y-cy, x-cx)*180/math.Pi+360, 360); a < a0 || a > a1 {
+			return 1
+		}
+		return math.Hypot(x-cx, y-cy) - r
+	}
+}
+
 func ring(cx, cy, r, hw float64) shape {
 	return func(x, y float64) float64 { return math.Abs(math.Hypot(x-cx, y-cy)-r) - hw }
 }
@@ -68,14 +78,28 @@ var hook = []shape{
 	segment(6, 14.5, 6, 13.5, 1),
 }
 
-// hotspotIcon draws the template image (18 pt high @2x): the mark for a state, then the phone's
-// signal unless bars < 0, unlit bars dimmed. At least one of the two must be there.
-func hotspotIcon(state, bars int, mark bool) []byte {
+// Signal glyphs share the mark's box, which is also where macOS draws its own Wi-Fi icon: from
+// y = 3.5 to 20.5. The label (see phtSetIcon) stands on labelBaseline, the glyphs' bottom.
+const (
+	glyphTop, glyphBase = 3.5, 20.5
+	labelBaseline       = (24 - glyphBase) * 0.75 // points above the bottom of the 18 pt image
+)
+
+// hotspotIcon draws the template image (18 pt high @2x) for k: the mark for a state, then the
+// phone's signal, cellular bars or the Wi-Fi fan, unlit parts dimmed. At least one of the two.
+func hotspotIcon(k iconKey) []byte {
 	var parts, dim []shape
 	width, left, alpha := 0.0, 0.5, 1.0
-	if mark {
+	lit := func(on bool, s shape) {
+		if on {
+			parts = append(parts, s)
+		} else {
+			dim = append(dim, s)
+		}
+	}
+	if k.mark {
 		parts = append(parts, hook...)
-		switch state {
+		switch k.state {
 		case iconDisconnected:
 			parts, alpha = append(parts, ring(6, 8.6, 1.5, 1)), 0.35
 		case iconOff:
@@ -89,21 +113,24 @@ func hotspotIcon(state, bars int, mark bool) []byte {
 		}
 		width, left = 24, 22.3 // the gap after the hook matches the one before the label
 	}
-	if bars >= 0 {
-		// After the iPhone status bar: bars twice as wide as their gaps, 1.15 to 3 times as tall as
-		// wide, standing on the label's baseline and as tall as its capitals (11 pt semibold), so the
-		// bars and "LTE" read as one.
-		const base, top = 18.3, 7.0 // measured against the label in the menu bar
-		const w, gap = (base - top) / 3, 1.5
+	switch {
+	case k.bars >= 0 && k.wifi:
+		// The macOS Wi-Fi fan, measured off the system icon: a wedge and two bands. Level 1 lights the
+		// wedge, each step a band more.
+		cx, cy := left+11.8, glyphBase-0.4
+		lit(k.bars >= 1, sector(cx, cy, 5.9, 228, 312))
+		for i, r := range []float64{9.5, 14.9} {
+			lit(k.bars >= i+2, arc(cx, cy, r, 228, 312, 1.8))
+		}
+		width = left + 23.6 + 0.5
+	case k.bars >= 0:
+		// Proportions of the iPhone status bar: the tallest bar as tall as the Wi-Fi icon, bars
+		// 0.28 of that wide with 0.21 gaps, rising from 30 % in equal steps.
+		const h = glyphBase - glyphTop
+		const w, gap = 0.28 * h, 0.21 * h
 		for i := range 4 {
 			x := left + (w+gap)*float64(i)
-			h := (base - top) * (1.15 + 1.85*float64(i)/3) / 3
-			bar := roundedBox(x, base-h, x+w, base, 0.9)
-			if i < bars {
-				parts = append(parts, bar)
-			} else {
-				dim = append(dim, bar)
-			}
+			lit(i < k.bars, roundedBox(x, glyphBase-h*(0.3+0.7*float64(i)/3), x+w, glyphBase, 1.1))
 		}
 		width = left + 4*w + 3*gap + 0.5
 	}
@@ -157,7 +184,8 @@ const (
 
 // iconKey is everything the status item shows.
 type iconKey struct {
-	state, bars int // bars < 0: none
+	state, bars int  // bars < 0: none
+	wifi        bool // bars is the phone's own Wi-Fi level, not cellular
 	mark        bool
 	label       string
 }
@@ -169,9 +197,14 @@ func menuIcon(st *State, busy, style string) iconKey {
 	if st == nil || style == menuMark || (style == menuWhenOn && st.HS != hsOn) {
 		return k
 	}
-	k.bars = min(max(st.Sig, 0), 4)
-	if st.Net >= 1 && st.Net <= 4 {
-		k.label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
+	switch {
+	case st.WiFi != nil: // the phone itself is on Wi-Fi, and the hotspot shares it
+		k.bars, k.wifi = min(max(*st.WiFi, 0), 4), true
+	default:
+		k.bars = min(max(st.Sig, 0), 4)
+		if st.Net >= 1 && st.Net <= 4 {
+			k.label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
+		}
 	}
 	k.mark = style == menuBoth || (k.state != iconOn && k.state != iconOff)
 	return k

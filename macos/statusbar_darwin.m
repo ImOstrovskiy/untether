@@ -93,19 +93,29 @@ void phtEval(const char *js) {
     });
 }
 
-// PNG bytes of an 18 pt high @2x template image, and a short text after it ("" for none).
-void phtSetIcon(const void *png, int len, const char *title) {
+// PNG bytes of an 18 pt high @2x template image, and a short label after it ("" for none) standing
+// on baseline (points above the image's bottom). The label goes into the same template image, so the
+// system tints it exactly like the glyphs, and like its own Wi-Fi icon.
+void phtSetIcon(const void *png, int len, const char *title, double baseline) {
     NSData *data = [NSData dataWithBytes:png length:len];
     NSString *text = [NSString stringWithUTF8String:title];
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSImage *img = [[NSImage alloc] initWithData:data];
-        img.size = NSMakeSize(img.representations.firstObject.pixelsWide / 2.0, 18);
+        NSImage *glyphs = [[NSImage alloc] initWithData:data];
+        CGFloat w = glyphs.representations.firstObject.pixelsWide / 2.0;
+        // iPhone-like: capitals about three quarters of the bars.
+        NSFont *font = [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold];
+        NSDictionary *attrs = @{NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor};
+        CGFloat gap = text.length ? 2.5 : 0;
+        CGFloat tw = text.length ? ceil([text sizeWithAttributes:attrs].width) : 0;
+        NSImage *img = [NSImage imageWithSize:NSMakeSize(w + gap + tw, 18) flipped:NO drawingHandler:^BOOL(NSRect r) {
+            [glyphs drawInRect:NSMakeRect(0, 0, w, 18)];
+            if (text.length) [text drawAtPoint:NSMakePoint(w + gap, baseline + font.descender) withAttributes:attrs];
+            return YES;
+        }];
         img.template = YES;
         NSStatusBarButton *button = controller.item.button;
         button.image = img;
-        button.font = [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold];
-        button.title = text;
-        button.imagePosition = text.length ? NSImageLeft : NSImageOnly;
+        button.imagePosition = NSImageOnly;
     });
 }
 

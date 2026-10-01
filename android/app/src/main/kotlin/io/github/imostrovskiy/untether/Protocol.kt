@@ -77,6 +77,7 @@ data class Telemetry(
     val temperature: Int? = null, // battery, °C
     val sims: List<Sim> = emptyList(), // active subscriptions
     val dataSim: Int? = null, // subscription id used for mobile data
+    val wifi: Int? = null, // 0–4 while the phone's own internet is Wi-Fi
 )
 
 data class Sim(val id: Int, val name: String)
@@ -120,6 +121,7 @@ data class PhoneState(
             telemetry.temperature?.let { m["temp"] = it }
             if (telemetry.sims.isNotEmpty()) m["sims"] = telemetry.sims.map { linkedMapOf<String, Any>("id" to it.id, "n" to it.name) }
             telemetry.dataSim?.let { m["dsim"] = it }
+            telemetry.wifi?.let { m["wifi"] = it }
             if (extras.findMac) m["fmac"] = true
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes

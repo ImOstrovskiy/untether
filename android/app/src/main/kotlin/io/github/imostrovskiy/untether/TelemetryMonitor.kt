@@ -5,6 +5,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.telephony.CellInfo
 import android.telephony.CellSignalStrengthLte
@@ -18,7 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-/** Battery, cellular network type, operator and signal. */
+/** Battery, cellular network type, operator and signal, and whether the phone itself is on Wi-Fi. */
 class TelemetryMonitor(private val ctx: Context) {
     private val _telemetry = MutableStateFlow(Telemetry())
     val telemetry: StateFlow<Telemetry> = _telemetry
@@ -53,6 +57,23 @@ class TelemetryMonitor(private val ctx: Context) {
         }
     }
 
+    private val wifi = ctx.getSystemService(WifiManager::class.java)
+
+    /** The phone's own internet: when it is Wi-Fi, the hotspot shares that instead of mobile data. */
+    private val defaultNetwork = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(n: Network, c: NetworkCapabilities) = _telemetry.update {
+            it.copy(wifi = if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifiLevel(c.signalStrength) else null)
+        }
+        override fun onLost(n: Network) = _telemetry.update { it.copy(wifi = null) }
+    }
+
+    /** 0–4 like the cellular level. */
+    private fun wifiLevel(rssi: Int): Int {
+        @Suppress("DEPRECATION")
+        val r = if (rssi == NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED) wifi.connectionInfo.rssi else rssi
+        return wifi.calculateSignalLevel(r) * 4 / wifi.maxSignalLevel.coerceAtLeast(1)
+    }
+
     private val subscriptions = ctx.getSystemService(SubscriptionManager::class.java)
     private val simsChanged = object : SubscriptionManager.OnSubscriptionsChangedListener() {
         override fun onSubscriptionsChanged() = refreshSims()
@@ -77,6 +98,7 @@ class TelemetryMonitor(private val ctx: Context) {
         refreshSims()
         runCatching { telephony.registerTelephonyCallback(ctx.mainExecutor, radio) }
             .onFailure { AppLog.log("Telephony callback: $it (grant phone permission)") }
+        ctx.getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(defaultNetwork)
     }
 
     fun close() {
@@ -84,6 +106,7 @@ class TelemetryMonitor(private val ctx: Context) {
         ctx.unregisterReceiver(dataSimChanged)
         subscriptions.removeOnSubscriptionsChangedListener(simsChanged)
         runCatching { telephony.unregisterTelephonyCallback(radio) }
+        ctx.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(defaultNetwork)
     }
 
     private fun netCode(d: TelephonyDisplayInfo) = when {
