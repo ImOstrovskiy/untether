@@ -174,12 +174,10 @@ func (a *app) handleAction(action, arg string) {
 		if failed { // only a problem needs the window
 			uiShow()
 		}
-	case "nr":
-		allow := byte(0)
-		if arg == "1" {
-			allow = 1
+	case "netMode":
+		if m, err := strconv.Atoi(arg); err == nil && m >= 0 && m <= 3 {
+			a.send(opSetNetMode, []byte{byte(m)}, "")
 		}
-		a.send(opSetNR, []byte{allow}, "")
 	case "ring":
 		a.send(opRing, nil, "")
 	case "reconnectData":

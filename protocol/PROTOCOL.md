@@ -68,7 +68,7 @@ the Mac notices the different `ssid` in `state` and says so.
    | `0x07` | subscription id, int32 BE | SET_DATA_SIM — use this SIM for mobile data *(v1.1)* |
    | `0x08` | — | RECONNECT_DATA — mobile data off and on again *(v1.1)* |
    | `0x09` | — | STOP_FIND_MAC — clear the phone's find-my-Mac request *(v1.1)* |
-   | `0x0A` | 1 byte | SET_NR — `1` allows 5G on the mobile data SIM, `0` keeps it on LTE and older *(v1.1)* |
+   | `0x0A` | 1 byte | SET_NET_MODE — the mobile data SIM's network mode: `0` auto (the types it had before), `1` LTE only, `2` 3G only, `3` 2G only *(v1.1)* |
 
    The value may arrive as a single write or as a long (prepared) write.
 3. The server regenerates `nonce` after **every** write to `command`,
@@ -118,7 +118,7 @@ treats 150 s without state on a live link as a dead link and reconnects.
 | `ring` | bool | find-my-phone is ringing, present when true *(v1.1)* |
 | `fmac` | bool | the phone asks the Mac to play a sound, present when true *(v1.1)* |
 | `wifi` | uint | 0–4, present while the phone's own internet is Wi-Fi, which the hotspot then shares *(v1.1, optional)* |
-| `nr` | uint | `1` when the mobile data SIM may use 5G, `0` when it is kept on LTE; absent while unknown *(v1.1, optional)* |
+| `mode` | uint | the mobile data SIM's network mode as in `0x0A`, or `4` when set elsewhere; absent while unknown *(v1.1, optional)* |
 | `bye` | bool | sent alone with `v` as the last notification when the user stops Untether on the phone; the Mac drops the link *(v1.1)* |
 
 Readers must ignore unknown keys.

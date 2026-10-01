@@ -21,9 +21,8 @@ interface IHotspotShell {
     String setDataSim(int subId) = 7;
     /** Runs a command as the shell user and returns its exit code. */
     int exec(in String[] cmd) = 8;
-    /** Allows or forbids 5G (NR) on a SIM, keeping its other network types. The app passes the
-     *  subscription: in this process SubscriptionManager has no telephony service behind it. */
-    String setNr(int subId, boolean allowed) = 9;
-    /** 1 when the SIM may use 5G, 0 when not, -1 unknown. */
-    int nrAllowed(int subId) = 10;
+    /** A SIM's network types allowed by the user (TelephonyManager.NETWORK_TYPE_BITMASK_*), -1 unknown.
+     *  The app passes the subscription: in this process SubscriptionManager has no telephony behind it. */
+    long allowedTypes(int subId) = 9;
+    String setAllowedTypes(int subId, long types) = 10;
 }

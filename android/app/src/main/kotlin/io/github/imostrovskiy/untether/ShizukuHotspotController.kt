@@ -12,6 +12,18 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_EDGE
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_GPRS
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_GSM
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_HSDPA
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_HSPA
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_HSPAP
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_HSUPA
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_LTE
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_LTE_CA
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_NR
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_TD_SCDMA
+import android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_UMTS
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -39,9 +51,12 @@ class ShizukuHotspotController(
     private val _shizuku = MutableStateFlow(ShizukuStatus.NOT_RUNNING)
     val shizuku: StateFlow<ShizukuStatus> = _shizuku
 
-    /** Whether the mobile data SIM may use 5G; null while unknown. */
-    private val _nr = MutableStateFlow<Boolean?>(null)
-    val nr: StateFlow<Boolean?> = _nr
+    /** The mobile data SIM's network mode, Protocol.MODE_*; null while unknown. */
+    private val _mode = MutableStateFlow<Int?>(null)
+    val mode: StateFlow<Int?> = _mode
+
+    /** Per SIM, the network types it had before Untether locked it: what Auto goes back to. */
+    private val defaults = ctx.getSharedPreferences("network", Context.MODE_PRIVATE)
 
     /** Number of clients on the hotspot's blocklist. */
     private val _blocked = MutableStateFlow(0)
@@ -84,7 +99,7 @@ class ShizukuHotspotController(
             remote = shell
             if (call("Hotspot shell") { shell.open(events) }) onApState(shell.apState())
             syncConfig()
-            refreshNr()
+            refreshMode()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -161,14 +176,33 @@ class ShizukuHotspotController(
 
     fun unblockAll() = call("Blocklist update") { remote!!.editBlocklist(null) }.also { AppLog.log("Blocklist cleared: $it") }
 
-    fun setDataSim(subId: Int) = call("Data SIM switch") { remote!!.setDataSim(subId) }.also { refreshNr() }
+    fun setDataSim(subId: Int) = call("Data SIM switch") { remote!!.setDataSim(subId) }.also { refreshMode() }
 
-    fun setNr(allowed: Boolean) = call("5G switch") { remote!!.setNr(SubscriptionManager.getDefaultDataSubscriptionId(), allowed) }
-        .also { refreshNr() }
+    /** Locks the mobile data SIM to one generation, or gives it back the types it had before (Auto). */
+    fun setMode(mode: Int) {
+        val shell = remote ?: return AppLog.log("Network mode: Shizuku not ready")
+        val subId = SubscriptionManager.getDefaultDataSubscriptionId()
+        val key = "default_$subId"
+        val current = runCatching { shell.allowedTypes(subId) }.getOrDefault(-1L)
+        if (current < 0) return AppLog.log("Network mode: allowed types unreadable")
+        if (!defaults.contains(key) && current !in LOCKS.values) defaults.edit().putLong(key, current).apply()
+        val wanted = if (mode == Protocol.MODE_AUTO) defaults.getLong(key, ALL_TYPES) else LOCKS[mode] ?: return
+        if (call("Network mode") { shell.setAllowedTypes(subId, wanted) }) {
+            AppLog.log("Network mode on SIM $subId: ${MODE_NAMES[mode]}")
+            if (mode == Protocol.MODE_AUTO) defaults.edit().remove(key).apply()
+        }
+        refreshMode()
+    }
 
-    fun refreshNr() {
-        _nr.value = runCatching { remote?.nrAllowed(SubscriptionManager.getDefaultDataSubscriptionId()) }.getOrNull()
-            ?.takeIf { it >= 0 }?.let { it == 1 }
+    fun refreshMode() {
+        val subId = SubscriptionManager.getDefaultDataSubscriptionId()
+        val types = runCatching { remote?.allowedTypes(subId) }.getOrNull()?.takeIf { it >= 0 }
+        _mode.value = types?.let { t ->
+            LOCKS.entries.firstOrNull { it.value == t }?.key ?: when {
+                !defaults.contains("default_$subId") || defaults.getLong("default_$subId", 0) == t -> Protocol.MODE_AUTO
+                else -> Protocol.MODE_OTHER // changed elsewhere since Untether locked it
+            }
+        }
     }
 
     /** Runs a command as the shell user; null if Shizuku is not ready. Blocks. */
@@ -227,6 +261,15 @@ class ShizukuHotspotController(
     }
 
     private companion object {
+        val LTE_TYPES = NETWORK_TYPE_BITMASK_LTE or NETWORK_TYPE_BITMASK_LTE_CA
+        val G3_TYPES = NETWORK_TYPE_BITMASK_UMTS or NETWORK_TYPE_BITMASK_HSDPA or NETWORK_TYPE_BITMASK_HSUPA or
+            NETWORK_TYPE_BITMASK_HSPA or NETWORK_TYPE_BITMASK_HSPAP or NETWORK_TYPE_BITMASK_TD_SCDMA
+        val G2_TYPES = NETWORK_TYPE_BITMASK_GSM or NETWORK_TYPE_BITMASK_GPRS or NETWORK_TYPE_BITMASK_EDGE
+        val LOCKS = mapOf(Protocol.MODE_LTE to LTE_TYPES, Protocol.MODE_3G to G3_TYPES, Protocol.MODE_2G to G2_TYPES)
+        /** Auto when nothing was saved (Untether reinstalled while locked). */
+        val ALL_TYPES = G2_TYPES or G3_TYPES or LTE_TYPES or NETWORK_TYPE_BITMASK_NR
+        val MODE_NAMES = mapOf(Protocol.MODE_AUTO to "auto", Protocol.MODE_LTE to "LTE", Protocol.MODE_3G to "3G", Protocol.MODE_2G to "2G")
+
         // Hidden WifiManager constants.
         const val ACTION_AP_STATE = "android.net.wifi.WIFI_AP_STATE_CHANGED"
         const val EXTRA_AP_STATE = "wifi_state"

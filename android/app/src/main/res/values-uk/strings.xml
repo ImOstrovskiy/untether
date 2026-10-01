@@ -31,7 +31,8 @@
     <string name="section_data">Мобільні дані</string>
     <string name="reconnect_data">Перепідключити мобільні дані</string>
     <string name="data_sim">SIM для даних</string>
-    <string name="nr_body">Вимкнено: телефон лишається на LTE</string>
+    <string name="network_mode">Режим мережі</string>
+    <string name="mode_auto">Авто</string>
     <string name="section_clients">Підключені пристрої</string>
     <string name="no_clients">Немає пристроїв</string>
     <string name="block">Заблокувати</string>

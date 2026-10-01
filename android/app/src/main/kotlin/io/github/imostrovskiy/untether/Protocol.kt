@@ -24,7 +24,14 @@ object Protocol {
     const val OP_SET_DATA_SIM = 0x07 // arg: subscription id, int32 big-endian
     const val OP_RECONNECT_DATA = 0x08
     const val OP_STOP_FIND_MAC = 0x09
-    const val OP_SET_NR = 0x0A // arg: 1 byte, 1 allows 5G, 0 keeps the data SIM on LTE and older
+    const val OP_SET_NET_MODE = 0x0A // arg: 1 byte, MODE_AUTO … MODE_2G
+
+    /** Network modes of the mobile data SIM: the phone's own choice, or locked to one generation. */
+    const val MODE_AUTO = 0
+    const val MODE_LTE = 1
+    const val MODE_3G = 2
+    const val MODE_2G = 3
+    const val MODE_OTHER = 4 // state only: set elsewhere
 
     const val ERR_REJECTED = 0x80
     const val ERR_UNKNOWN_OP = 0x81
@@ -89,7 +96,7 @@ data class Extras(
     val batteryMin: Int = 0,
     val ringing: Boolean = false,
     val findMac: Boolean = false,
-    val nr: Boolean? = null, // 5G allowed on the data SIM; null unknown
+    val mode: Int? = null, // the data SIM's network mode, Protocol.MODE_*; null unknown
 )
 
 data class PhoneState(
@@ -130,7 +137,7 @@ data class PhoneState(
             telemetry.dataSim?.let { m["dsim"] = it }
             telemetry.wifi?.let { m["wifi"] = it }
             if (extras.findMac) m["fmac"] = true
-            extras.nr?.let { m["nr"] = if (it) 1 else 0 }
+            extras.mode?.let { m["mode"] = it }
             val bytes = Cbor.encode(m)
             if (bytes.size <= Protocol.MAX_STATE || shown.isEmpty()) return bytes
             shown = shown.dropLast(1)

@@ -32,8 +32,8 @@
     <string name="section_data">Mobile data</string>
     <string name="reconnect_data">Reconnect mobile data</string>
     <string name="data_sim">SIM for data</string>
-    <string name="nr" translatable="false">5G</string>
-    <string name="nr_body">Off keeps the phone on LTE</string>
+    <string name="network_mode">Network mode</string>
+    <string name="mode_auto">Auto</string>
     <string name="section_clients">Connected devices</string>
     <string name="no_clients">No devices</string>
     <string name="block">Block</string>

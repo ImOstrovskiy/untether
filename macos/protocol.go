@@ -26,7 +26,7 @@ const (
 	opSetDataSim byte = 0x07 // arg: subscription id, int32 big-endian
 	opReconnect  byte = 0x08 // mobile data off and on
 	opStopFind   byte = 0x09 // stop the phone's find-my-Mac request
-	opSetNR      byte = 0x0A // arg: 1 allows 5G on the data SIM, 0 keeps it on LTE
+	opSetNetMode byte = 0x0A // arg: the data SIM's network mode, 0 auto, 1 LTE, 2 3G, 3 2G
 )
 
 // Hotspot states (State.HS).
@@ -81,7 +81,7 @@ type State struct {
 	DataSim  *int   `cbor:"dsim,omitempty" json:"dsim,omitempty"`
 	FindMac  bool   `cbor:"fmac,omitempty" json:"fmac,omitempty"`
 	WiFi     *int   `cbor:"wifi,omitempty" json:"wifi,omitempty"` // 0–4 while the phone's own internet is Wi-Fi
-	NR       *int   `cbor:"nr,omitempty" json:"nr,omitempty"`     // 1: the data SIM may use 5G, 0: kept on LTE
+	Mode     *int   `cbor:"mode,omitempty" json:"mode,omitempty"` // network mode as opSetNetMode, 4: set elsewhere
 	Bye      bool   `cbor:"bye,omitempty" json:"-"`               // Untether was stopped on the phone
 }
 

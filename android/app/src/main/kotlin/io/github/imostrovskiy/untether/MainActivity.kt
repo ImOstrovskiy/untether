@@ -330,15 +330,26 @@ private fun DataCard(p: PhoneState) = Section(R.string.section_data) {
     } else {
         sims.firstOrNull()?.let { InfoRow(R.drawable.ic_sim_card, stringResource(R.string.data_sim), it.name) }
     }
-    p.extras.nr?.let { nr ->
-        InfoRow(
-            R.drawable.ic_signal_cellular_alt,
-            stringResource(R.string.nr),
-            stringResource(R.string.nr_body),
-            Modifier.toggleable(value = nr, enabled = p.shizuku == ShizukuStatus.OK, role = Role.Switch) {
-                HotspotService.start(ctx, HotspotService.ACTION_SET_NR) { putExtra(HotspotService.EXTRA_VALUE, it) }
-            },
-        ) { Switch(checked = nr, onCheckedChange = null, enabled = p.shizuku == ShizukuStatus.OK) }
+    p.extras.mode?.let { mode ->
+        Text(
+            stringResource(R.string.network_mode),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        val modes = listOf(
+            Protocol.MODE_AUTO to stringResource(R.string.mode_auto),
+            Protocol.MODE_LTE to "LTE", Protocol.MODE_3G to "3G", Protocol.MODE_2G to "2G",
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            modes.forEachIndexed { i, (m, label) ->
+                SegmentedButton(
+                    selected = m == mode,
+                    onClick = { HotspotService.start(ctx, HotspotService.ACTION_SET_NET_MODE) { putExtra(HotspotService.EXTRA_VALUE, m) } },
+                    shape = SegmentedButtonDefaults.itemShape(i, modes.size),
+                    enabled = p.shizuku == ShizukuStatus.OK,
+                ) { Text(label) }
+            }
+        }
     }
     OutlinedButton(
         onClick = { HotspotService.start(ctx, HotspotService.ACTION_RECONNECT_DATA) },

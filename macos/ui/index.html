@@ -198,7 +198,7 @@ const T = {
     ring: "Ring phone", stopRing: "Stop ringing", reconnect: "Reconnect data",
     mobile: "Mobile network", noNet: "No network", dataSim: "SIM for data", quality: "Signal quality",
     devices: "Devices on the hotspot", none: "No devices yet", block: "Block", unblockAll: "Unblock all ({0})", blocked: "{0} blocked",
-    general: "General", quickConnect: "Quick connect", quickConnectHint: "Right-click opens this window", nrHint: "Off keeps the phone on LTE", login: "Launch at login", autoOff: "Turn off on sleep or when leaving it", autoOffHint: "Needs Location permission",
+    general: "General", quickConnect: "Quick connect", quickConnectHint: "Right-click opens this window", netMode: "Network mode", auto: "Auto", login: "Launch at login", autoOff: "Turn off on sleep or when leaving it", autoOffHint: "Needs Location permission",
     phoneSection: "Phone", pair: "Pair with phone…", pairHint: "Tap Pair Mac on the phone first", forget: "Forget phone",
    
     quit: "Quit", shizukuDown: "Shizuku is not running on the phone", shizukuPerm: "Shizuku has no permission on the phone",
@@ -217,7 +217,7 @@ const T = {
     ring: "Подзвонити", stopRing: "Зупинити дзвінок", reconnect: "Перепідключити дані",
     mobile: "Мобільна мережа", noNet: "Немає мережі", dataSim: "SIM для даних", quality: "Якість сигналу",
     devices: "Пристрої на точці доступу", none: "Поки немає пристроїв", block: "Заблокувати", unblockAll: "Розблокувати всі ({0})", blocked: "{0} заблоковано",
-    general: "Загальне", quickConnect: "Швидке підключення", quickConnectHint: "Правий клік відкриває це вікно", nrHint: "Вимкнено: телефон лишається на LTE", login: "Запускати при вході", autoOff: "Вимикати при сні або виході з мережі", autoOffHint: "Потрібен доступ до геолокації",
+    general: "Загальне", quickConnect: "Швидке підключення", quickConnectHint: "Правий клік відкриває це вікно", netMode: "Режим мережі", auto: "Авто", login: "Запускати при вході", autoOff: "Вимикати при сні або виході з мережі", autoOffHint: "Потрібен доступ до геолокації",
     phoneSection: "Телефон", pair: "Сполучити з телефоном…", pairHint: "Спершу натисніть «Під'єднати Mac» на телефоні", forget: "Забути телефон",
    
     quit: "Вийти", shizukuDown: "На телефоні не запущено Shizuku", shizukuPerm: "Shizuku не має дозволу на телефоні",
@@ -378,8 +378,9 @@ function network(p) {
     <div class="row">${icon("sim_card")}<div class="grow"><div class="label">${t("dataSim")}</div>
       <div class="hint">${esc((sims.find(s => s.id === p.dsim) || sims[0] || {}).n || "—")}</div></div></div>
     ${seg ? `<div style="padding-bottom:6px">${seg}</div>` : ""}
-    ${p.nr != null ? `<div class="row">${icon("signal_cellular_alt")}<div class="grow"><div class="label">5G</div><div class="hint">${t("nrHint")}</div></div>
-      <div class="switch ${p.nr ? "on" : ""}" onclick="send('nr', ${p.nr ? 0 : 1})"></div></div>` : ""}
+    ${p.mode != null ? `<div class="row">${icon("signal_cellular_alt")}<div class="grow"><div class="label">${t("netMode")}</div></div></div>
+    <div style="padding-bottom:6px"><div class="seg">${[[0, t("auto")], [1, "LTE"], [2, "3G"], [3, "2G"]].map(([m, l]) =>
+      `<button class="${p.mode === m ? "on" : ""}" onclick="send('netMode', ${m})">${l}</button>`).join("")}</div></div>` : ""}
   </div>
   <h2>${t("quality")}</h2>
   <div class="card">
@@ -432,7 +433,7 @@ function demoState(kind) {
     lang: (navigator.language || "en").slice(0, 2), version: "0.2.0", paired: true, phoneName: "Pixel 9", busy: "", note: "",
     joinTook: 4.2, settings: { login: true, autoOff: false, quickConnect: false },
     phone: { hs: 0, ssid: "Untether-4F2A", cl: [], ncl: 0, bat: 79, chg: true, net: 2, sig: 3, shz: 0, op: "lifecell", rsrp: -107, snr: 9,
-      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, nr: 1, blk: 0, bmin: 10 },
+      temp: 33, sims: [{ id: 24, n: "lifecell" }, { id: 1, n: "Work" }], dsim: 24, mode: 0, blk: 0, bmin: 10 },
   };
   const p = base.phone;
   if (kind === "starting") { p.hs = 1; base.busy = ""; }
@@ -445,7 +446,7 @@ function demoState(kind) {
 let demoKind = "on";
 function demoSet(kind) { demoKind = kind; render(Object.assign(demoState(kind), { lang: S ? S.lang : undefined })); }
 function demoLang() { const order = ["en", "uk"]; S.lang = order[(order.indexOf(S.lang) + 1) % 2]; draw(); }
-function demoAction(action) {
+function demoAction(action, arg) {
   const p = S.phone;
   if (action === "toggle" && p) { p.hs = p.hs === 2 ? 0 : 2; }
   if (action === "ring" && p) p.ring = !p.ring;
@@ -453,7 +454,7 @@ function demoAction(action) {
   if (action === "login") S.settings.login = !S.settings.login;
   if (action === "autoOff") S.settings.autoOff = !S.settings.autoOff;
   if (action === "quickConnect") S.settings.quickConnect = !S.settings.quickConnect;
-  if (action === "nr" && p) p.nr = p.nr ? 0 : 1;
+  if (action === "netMode" && p) p.mode = Number(arg);
   draw();
 }
 

@@ -13,7 +13,6 @@ import android.net.wifi.WifiSsid
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
-import android.telephony.TelephonyManager
 import android.util.SparseIntArray
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -134,18 +133,12 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
         asInterface("com.android.internal.telephony.ISub", service("isub")).call("setDefaultDataSubId", subId)
     }
 
-    override fun setNr(subId: Int, allowed: Boolean): String? = attempt {
-        val current = telephony().callWithPkg("getAllowedNetworkTypesForReason", subId, REASON_USER) as Long
-        val nr = TelephonyManager.NETWORK_TYPE_BITMASK_NR
-        val wanted = if (allowed) current or nr else current and nr.inv()
-        require(telephony().callWithPkg("setAllowedNetworkTypesForReason", subId, REASON_USER, wanted) != false) { "rejected by the system" }
-        log("5G ${if (allowed) "allowed" else "off"} on SIM $subId")
-    }
+    override fun allowedTypes(subId: Int): Long =
+        runCatching { telephony().callWithPkg("getAllowedNetworkTypesForReason", subId, REASON_USER) as Long }.getOrDefault(-1L)
 
-    override fun nrAllowed(subId: Int): Int = runCatching {
-        val types = telephony().callWithPkg("getAllowedNetworkTypesForReason", subId, REASON_USER) as Long
-        if (types and TelephonyManager.NETWORK_TYPE_BITMASK_NR != 0L) 1 else 0
-    }.getOrDefault(-1)
+    override fun setAllowedTypes(subId: Int, types: Long): String? = attempt {
+        require(telephony().callWithPkg("setAllowedNetworkTypesForReason", subId, REASON_USER, types) != false) { "rejected by the system" }
+    }
 
     private fun telephony() = asInterface("com.android.internal.telephony.ITelephony", service("phone"))
 

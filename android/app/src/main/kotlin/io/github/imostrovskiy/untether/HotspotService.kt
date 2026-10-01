@@ -81,7 +81,7 @@ class HotspotService : Service() {
         const val ACTION_STOP_RING = "io.github.imostrovskiy.untether.STOP_RING"
         const val ACTION_FIND_MAC = "io.github.imostrovskiy.untether.FIND_MAC"
         const val ACTION_RECONNECT_DATA = "io.github.imostrovskiy.untether.RECONNECT_DATA"
-        const val ACTION_SET_NR = "io.github.imostrovskiy.untether.SET_NR" // extra EXTRA_VALUE, boolean
+        const val ACTION_SET_NET_MODE = "io.github.imostrovskiy.untether.SET_NET_MODE" // extra EXTRA_VALUE, Protocol.MODE_*
         const val ACTION_SET_DATA_SIM = "io.github.imostrovskiy.untether.SET_DATA_SIM" // extra EXTRA_SUB_ID
         const val EXTRA_SUB_ID = "sub_id"
         private const val FIND_MAC_MS = 30_000L
@@ -157,7 +157,7 @@ class HotspotService : Service() {
         telemetry = TelemetryMonitor(this).also { it.open() }
         registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         openGatt()
-        val extras = combine(hotspot.blocked, settings, ringing, findMac, hotspot.nr) { b, s, r, f, nr -> Extras(b, s.batteryMin, r, f, nr) }
+        val extras = combine(hotspot.blocked, settings, ringing, findMac, hotspot.mode) { b, s, r, f, m -> Extras(b, s.batteryMin, r, f, m) }
         combine(hotspot.state, hotspot.clients, telemetry.telemetry, hotspot.shizuku, extras, ::PhoneState)
             .onEach(::publish)
             .launchIn(scope)
@@ -202,7 +202,7 @@ class HotspotService : Service() {
             ACTION_FIND_MAC -> findMac(!findMac.value)
             ACTION_RECONNECT_DATA -> scope.launch { reconnectData() }
             ACTION_SET_DATA_SIM -> intent.getIntExtra(EXTRA_SUB_ID, -1).takeIf { it >= 0 }?.let { setDataSim(it) }
-            ACTION_SET_NR -> hotspot.setNr(intent.getBooleanExtra(EXTRA_VALUE, true))
+            ACTION_SET_NET_MODE -> intent.getIntExtra(EXTRA_VALUE, -1).takeIf { it in Protocol.MODE_AUTO..Protocol.MODE_2G }?.let(hotspot::setMode)
         }
         return START_STICKY
     }
@@ -432,7 +432,7 @@ class HotspotService : Service() {
         val ok = BluetoothGatt.GATT_SUCCESS
         val needsShizuku = cmd?.op in setOf(
             Protocol.OP_ON, Protocol.OP_OFF, Protocol.OP_BLOCK, Protocol.OP_UNBLOCK_ALL,
-            Protocol.OP_SET_DATA_SIM, Protocol.OP_RECONNECT_DATA, Protocol.OP_SET_NR,
+            Protocol.OP_SET_DATA_SIM, Protocol.OP_RECONNECT_DATA, Protocol.OP_SET_NET_MODE,
         )
         val status = when {
             cmd == null -> Protocol.ERR_REJECTED
@@ -440,7 +440,8 @@ class HotspotService : Service() {
             cmd.op == Protocol.OP_ON && batteryTooLow(telemetry.telemetry.value) -> Protocol.ERR_BATTERY_LOW
             cmd.op == Protocol.OP_BLOCK && cmd.arg.size != 6 -> Protocol.ERR_UNKNOWN_OP
             cmd.op == Protocol.OP_SET_DATA_SIM && cmd.arg.size != 4 -> Protocol.ERR_UNKNOWN_OP
-            cmd.op == Protocol.OP_SET_NR && cmd.arg.size != 1 -> Protocol.ERR_UNKNOWN_OP
+            cmd.op == Protocol.OP_SET_NET_MODE && (cmd.arg.size != 1 || cmd.arg[0] !in Protocol.MODE_AUTO..Protocol.MODE_2G) ->
+                Protocol.ERR_UNKNOWN_OP
             else -> when (cmd.op) {
                 Protocol.OP_ON -> ok.also { scope.launch { hotspot.start() } }
                 Protocol.OP_OFF -> ok.also { scope.launch { hotspot.stop() } }
@@ -454,7 +455,7 @@ class HotspotService : Service() {
                 }
                 Protocol.OP_RECONNECT_DATA -> ok.also { scope.launch { reconnectData() } }
                 Protocol.OP_STOP_FIND_MAC -> ok.also { scope.launch { findMac(false) } }
-                Protocol.OP_SET_NR -> ok.also { scope.launch { hotspot.setNr(cmd.arg[0] != 0.toByte()) } }
+                Protocol.OP_SET_NET_MODE -> ok.also { scope.launch { hotspot.setMode(cmd.arg[0].toInt()) } }
                 else -> Protocol.ERR_UNKNOWN_OP
             }
         }
