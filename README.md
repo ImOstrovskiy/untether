@@ -99,9 +99,10 @@ Shizuku; tap **Install anyway**. The source is all here, and the release is buil
 [CI](.github/workflows/build.yml) from it.
 
 **Mac.** Open the DMG and drag Untether to Applications. The app is signed with a self-signed
-certificate, not notarized, so the first launch needs a right-click → **Open** (or
-`xattr -dr com.apple.quarantine /Applications/Untether.app`). Allow Bluetooth, and Location (macOS
-needs it to tell which Wi-Fi network the Mac is on).
+certificate, not notarized, so macOS refuses the first launch. On macOS 15 and newer allow it in
+**System Settings → Privacy & Security → Open Anyway**; on macOS 14 a right-click → **Open** is
+enough. Or, in Terminal, `xattr -dr com.apple.quarantine /Applications/Untether.app`. Allow
+Bluetooth, and Location (macOS needs it to tell which Wi-Fi network the Mac is on).
 
 **Pair once.** On the phone tap **Pair** in the Mac section; on the Mac open **Settings → Pair with
 phone…**; confirm the same code on both screens.

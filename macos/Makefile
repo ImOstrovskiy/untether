@@ -15,12 +15,12 @@ app:
 	cp dist/untether $(APP)/Contents/MacOS/
 	codesign --force --timestamp=none --sign "$(SIGN_ID)" $(APP)
 
-# Drag-to-install disk image: the app next to a link to /Applications.
+# Drag-to-install disk image: the app next to a link to /Applications. The image itself stays
+# unsigned: Gatekeeper rejects a self-signed one outright, while an unsigned one just mounts.
 dmg: app
 	rm -rf dist/dmg && mkdir -p dist/dmg
 	cp -R $(APP) dist/dmg/ && ln -s /Applications dist/dmg/Applications
 	hdiutil create -quiet -volname Untether -srcfolder dist/dmg -ov -format UDZO $(DMG)
-	codesign --force --timestamp=none --sign "$(SIGN_ID)" $(DMG)
 	rm -rf dist/dmg
 
 test:
