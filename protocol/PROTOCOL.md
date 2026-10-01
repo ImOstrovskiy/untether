@@ -91,8 +91,10 @@ the Mac notices the different `ssid` in `state` and says so.
 `state` holds one CBOR map (≤ 512 bytes). A notification carries the same
 bytes; when the value is longer than ATT_MTU − 3 the notification carries
 an empty value and the Mac reads the characteristic (long read).
-The server notifies on every change and at least every 60 s *(v1.1)*; the Mac
-treats 150 s without state on a live link as a dead link and reconnects.
+The server notifies on every change and at least every 30 s *(v1.1)*. After 40 s
+without state the Mac reads `state` and subscribes again (a phone app restarted
+by an update keeps the link but loses the subscription); if that does not answer
+within 5 s, or after 150 s without state, it reconnects.
 
 | key | type | meaning |
 |-----|------|---------|

@@ -35,10 +35,13 @@ type Phone struct {
 	addr   bluetooth.Address
 	lost   chan struct{}
 
-	lastState atomic.Int64 // unix ms of the last state from the phone (it re-sends every 60 s)
+	lastState atomic.Int64 // unix ms of the last state from the phone (it re-sends every 30 s)
+	probing   atomic.Bool
 }
 
 const (
+	quietLimit      = 40 * time.Second  // a state is due every 30 s: past this, probe the link
+	probeTimeout    = 5 * time.Second   // tinygo's own read timeout is longer
 	silenceLimit    = 150 * time.Second // no state for this long on a live link: reconnect
 	failuresToReset = 5                 // consecutive failed sessions before resetting the adapter
 )
@@ -87,16 +90,59 @@ func (p *Phone) Run() {
 	}
 }
 
-// watchdog drops a link that stopped delivering state; Run then reconnects.
+// watchdog probes a link that went quiet and drops one that stays silent; Run then reconnects.
 func (p *Phone) watchdog() {
-	for range time.Tick(30 * time.Second) {
+	for range time.Tick(5 * time.Second) {
+		quiet := time.Since(time.UnixMilli(p.lastState.Load()))
 		p.mu.Lock()
-		silent := p.dev != nil && time.Since(time.UnixMilli(p.lastState.Load())) > silenceLimit
-		if silent {
+		live := p.dev != nil
+		if live && quiet > silenceLimit {
 			slog.Warn("watchdog: no state from the phone, reconnecting")
 			_ = p.dev.Disconnect()
 		}
 		p.mu.Unlock()
+		if live && quiet > quietLimit && p.probing.CompareAndSwap(false, true) {
+			go p.probe()
+		}
+	}
+}
+
+// probe re-reads the state and subscribes again. After the phone app restarts (an update), the link
+// and even the handles can outlive its GATT server while the subscription does not; in Doze a late
+// heartbeat just gets read early. Anything failing drops the link, and Run reconnects.
+func (p *Phone) probe() {
+	defer p.probing.Store(false)
+	p.mu.Lock()
+	ch, ok := p.chars[stateUUID]
+	dev := p.dev
+	p.mu.Unlock()
+	if !ok || dev == nil {
+		return
+	}
+	got := make(chan []byte, 1)
+	go func() {
+		if b, err := p.read(ch); err == nil {
+			got <- b
+		}
+	}()
+	var b []byte
+	var err error
+	select {
+	case b = <-got:
+		if err = ch.EnableNotifications(nil); err == nil {
+			err = ch.EnableNotifications(func(b []byte) { go p.handleState(b) })
+		}
+	case <-time.After(probeTimeout):
+		err = errors.New("no answer")
+	}
+	if err != nil {
+		slog.Warn("phone went quiet and does not answer, reconnecting", "err", err)
+		_ = dev.Disconnect()
+		return
+	}
+	slog.Info("phone was quiet; read its state and subscribed again")
+	if len(b) > 0 {
+		p.handleState(b)
 	}
 }
 

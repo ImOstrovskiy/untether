@@ -85,7 +85,7 @@ class HotspotService : Service() {
         const val ACTION_SET_DATA_SIM = "io.github.imostrovskiy.untether.SET_DATA_SIM" // extra EXTRA_SUB_ID
         const val EXTRA_SUB_ID = "sub_id"
         private const val FIND_MAC_MS = 30_000L
-        private const val HEARTBEAT_MS = 60_000L
+        private const val HEARTBEAT_MS = 30_000L
         private const val PAIRING_WINDOW_MS = 60_000L
         private const val RING_MS = 20_000L
         private const val NOTIFICATION_ID = 1
@@ -208,7 +208,7 @@ class HotspotService : Service() {
     }
 
     /**
-     * Every minute: re-send the state (the Mac's watchdog expects it) and bring the GATT server and
+     * Every 30 s: re-send the state (the Mac's watchdog expects it) and bring the GATT server and
      * advertising back if they are gone (Bluetooth stack restarts, advertising dropped by the system).
      */
     private suspend fun watchdog() {
