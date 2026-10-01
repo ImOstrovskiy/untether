@@ -1,43 +1,27 @@
 package io.github.imostrovskiy.untether
 
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.net.LinkAddress
 import android.net.MacAddress
-import android.net.TetheringInterface
-import android.net.TetheringManager
-import android.net.wifi.SoftApConfiguration
-import android.net.wifi.WifiManager
-import android.net.wifi.WifiSsid
-import android.os.Build
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.SparseIntArray
-import java.lang.reflect.Method
-import java.lang.reflect.Proxy
-import java.util.function.Supplier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import rikka.shizuku.Shizuku
 
 /**
- * Wi-Fi hotspot control through Shizuku: binder calls to the tethering and wifi services run as
- * the shell user. Approach after supershadoe/delta (BSD-3-Clause), see docs/DECISIONS.md (D2).
+ * Wi-Fi hotspot control through Shizuku. The privileged calls run in [HotspotShell], a Shizuku user
+ * service (a process of its own, as the shell user); this side keeps the state and talks to it.
  *
- * All callbacks arrive on the main thread; call the public methods on the main thread too.
- *
- * NewApi is suppressed on purpose: TetheringManager (with TetheringRequest and the event callback)
- * and SoftApConfiguration.Builder became public in API 36 but exist as @SystemApi since API 30,
- * and HiddenApiBypass (see App) opens them. What really is newer is guarded by SDK_INT below.
- * MissingPermission: these calls run as the shell user through Shizuku, which holds the permissions.
+ * Call the public methods on the main thread.
  */
-@SuppressLint("NewApi", "InlinedApi", "MissingPermission")
 class ShizukuHotspotController(
     private val ctx: Context,
     private val ssid: String,
@@ -64,16 +48,52 @@ class ShizukuHotspotController(
             syncConfig()
         }
 
-    private var tm: TetheringManager? = null
-    private var wm: WifiManager? = null // bound to the Shizuku-wrapped wifi service
+    private val main = Handler(Looper.getMainLooper())
+    private var remote: IHotspotShell? = null
+    private var bound = false
     private var configSynced = false
-    private var eventsRegistered = false
-    private var tetheredSsid: String? = null
+    @Volatile private var tetheredSsid: String? = null
 
-    /** TetheringManager/WifiManager take callerPkg from the context; it must match the calling uid (shell). */
-    private val shellContext = object : ContextWrapper(ctx) {
-        override fun getOpPackageName() = SHELL_PACKAGE
-        override fun getAttributionTag(): String? = null
+    private val serviceArgs = Shizuku.UserServiceArgs(ComponentName(ctx.packageName, HotspotShell::class.java.name))
+        .daemon(false)
+        .processNameSuffix("shell")
+        // A new install gets a fresh service process with the new code.
+        .version((ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime / 1000).toInt())
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            val shell = IHotspotShell.Stub.asInterface(binder)
+            remote = shell
+            if (call("Hotspot shell") { shell.open(events) }) onApState(shell.apState())
+            syncConfig()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            AppLog.log("Hotspot shell disconnected")
+            remote = null
+            bound = false
+            configSynced = false
+            // The process died on its own (Shizuku itself going away is handled by its listeners): bind again.
+            main.postDelayed(::refreshShizuku, 1_000)
+        }
+    }
+
+    /** Arrive on binder threads; the flows are thread-safe. */
+    private val events = object : IHotspotEvents.Stub() {
+        override fun onLog(line: String) = AppLog.log(line)
+        override fun onStartFailed(error: Int) {
+            _state.value = HotspotState(Hotspot.ERROR, error)
+        }
+        override fun onClients(macs: Array<String>, ips: Array<String?>, names: Array<String?>) {
+            _clients.value = macs.indices.map { Client(macs[it], ips[it], names[it]) }
+        }
+        override fun onTetheredSsid(ssid: String?) {
+            tetheredSsid = ssid
+            _state.update { if (it.hotspot == Hotspot.ON) it.copy(ssid = ssid ?: it.ssid) else it }
+        }
+        override fun onBlocked(count: Int) {
+            _blocked.value = count
+        }
     }
 
     private val apReceiver = object : BroadcastReceiver() {
@@ -83,16 +103,8 @@ class ShizukuHotspotController(
     private val onDead = Shizuku.OnBinderDeadListener { refreshShizuku() }
     private val onPermission = Shizuku.OnRequestPermissionResultListener { _, _ -> refreshShizuku() }
 
-    private val events = Proxy.newProxyInstance(
-        ctx.classLoader,
-        arrayOf(TetheringManager.TetheringEventCallback::class.java),
-    ) { proxy, method, args -> onTetheringEvent(proxy, method, args) } as TetheringManager.TetheringEventCallback
-
     fun open() {
         registerExported(ctx, apReceiver, IntentFilter(ACTION_AP_STATE))
-        runCatching {
-            onApState(ctx.getSystemService(WifiManager::class.java).call("getWifiApState") as Int)
-        }.onFailure { AppLog.log("getWifiApState: $it") }
         Shizuku.addBinderReceivedListenerSticky(onBinder)
         Shizuku.addBinderDeadListener(onDead)
         Shizuku.addRequestPermissionResultListener(onPermission)
@@ -100,54 +112,49 @@ class ShizukuHotspotController(
     }
 
     fun close() {
+        main.removeCallbacksAndMessages(null)
         Shizuku.removeBinderReceivedListener(onBinder)
         Shizuku.removeBinderDeadListener(onDead)
         Shizuku.removeRequestPermissionResultListener(onPermission)
         ctx.unregisterReceiver(apReceiver)
-        runCatching { if (eventsRegistered) tm?.unregisterTetheringEventCallback(events) }
+        if (bound) runCatching { Shizuku.unbindUserService(serviceArgs, connection, true) }
     }
 
     fun start() {
         clearError()
-        val tm = tm ?: return AppLog.log("start: Shizuku not ready")
+        val shell = remote ?: return AppLog.log("start: Shizuku not ready")
         if (!configSynced) syncConfig()
-        try {
-            val request = TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI)
-                // Normally the system config already holds our SSID/passphrase (same as quick settings);
-                // if it could not be written, carry the config in the request.
-                .apply { if (!configSynced && Build.VERSION.SDK_INT >= 36) setSoftApConfiguration(desiredConfig(null)) }
-                .build()
-            tm.startTethering(request, ctx.mainExecutor, object : TetheringManager.StartTetheringCallback {
-                override fun onTetheringStarted() = AppLog.log("Tethering started")
-                override fun onTetheringFailed(error: Int) {
-                    AppLog.log("Tethering failed: $error")
-                    _state.value = HotspotState(Hotspot.ERROR, error)
-                }
-            })
-        } catch (e: Throwable) {
-            AppLog.log("startTethering threw $e; fallback cmd wifi start-softap (no internet sharing)")
-            AppLog.log("start-softap → exit ${shizukuShell("cmd", "wifi", "start-softap", ssid, "wpa3_transition", pass)}")
-        }
+        call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced) }
     }
 
     fun stop() {
         clearError()
-        val tm = tm ?: return AppLog.log("stop: Shizuku not ready")
-        try {
-            // Hidden; unlike stopTethering(TetheringRequest) it also stops a hotspot started from quick settings.
-            tm.call("stopTethering", TetheringManager.TETHERING_WIFI)
-        } catch (e: Throwable) {
-            AppLog.log("stopTethering threw $e; fallback cmd wifi stop-softap")
-            AppLog.log("stop-softap → exit ${shizukuShell("cmd", "wifi", "stop-softap")}")
-        }
+        val shell = remote ?: return AppLog.log("stop: Shizuku not ready")
+        call("Stop") { shell.stopTethering() }
     }
 
     /** Adds [mac] to the hotspot blocklist; a connected client is dropped right away. */
-    fun block(mac: MacAddress) = editBlocklist { (it + mac).distinct() }.also { AppLog.log("Blocked $mac: $it") }
+    fun block(mac: MacAddress) = call("Blocklist update") { remote!!.editBlocklist(mac.toString()) }.also { AppLog.log("Blocked $mac: $it") }
 
-    fun unblockAll() = editBlocklist { emptyList() }.also { AppLog.log("Blocklist cleared: $it") }
+    fun unblockAll() = call("Blocklist update") { remote!!.editBlocklist(null) }.also { AppLog.log("Blocklist cleared: $it") }
+
+    fun setDataSim(subId: Int) = call("Data SIM switch") { remote!!.setDataSim(subId) }
+
+    /** Runs a command as the shell user; null if Shizuku is not ready. Blocks. */
+    fun exec(vararg cmd: String): Int? = remote?.let { runCatching { it.exec(arrayOf(*cmd)) }.getOrNull() }
 
     private fun clearError() = _state.update { if (it.hotspot == Hotspot.ERROR) HotspotState() else it }
+
+    /** Logs the failure of a shell call (an error string, or the shell process gone) and returns success. */
+    private fun call(what: String, block: () -> String?): Boolean {
+        val error = try {
+            block()
+        } catch (e: Exception) {
+            e.toString()
+        }
+        error?.let { AppLog.log("$what failed: $it") }
+        return error == null
+    }
 
     private fun onApState(s: Int) = _state.update { cur ->
         when (s) {
@@ -168,128 +175,25 @@ class ShizukuHotspotController(
             Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED -> ShizukuStatus.NO_PERMISSION
             else -> ShizukuStatus.OK
         }
-        if (s == ShizukuStatus.OK && tm == null) connect()
+        if (s == ShizukuStatus.OK && !bound) {
+            bound = runCatching { Shizuku.bindUserService(serviceArgs, connection) }
+                .onFailure { AppLog.log("Hotspot shell: $it") }.isSuccess
+        }
         if (s != ShizukuStatus.OK) {
-            tm = null
-            wm = null
+            remote = null
+            bound = false
             configSynced = false
         }
         if (s != _shizuku.value) AppLog.log("Shizuku: $s")
         _shizuku.value = s
     }
 
-    private fun connect() {
-        try {
-            val binder = Supplier<IBinder?> { shizukuBinder("tethering") }
-            val manager = TetheringManager::class.java
-                .getConstructor(Context::class.java, Supplier::class.java)
-                .newInstance(shellContext, binder)
-            // The event registration lives in system_server and survives a Shizuku restart,
-            // so only the first manager registers it.
-            if (!eventsRegistered) {
-                manager.registerTetheringEventCallback(ctx.mainExecutor, events)
-                eventsRegistered = true
-            }
-            tm = manager
-        } catch (e: Throwable) {
-            AppLog.log("TetheringManager over Shizuku failed: $e")
-        }
-        try {
-            val service = shizukuService("wifi", "android.net.wifi.IWifiManager")
-            // (Context, IWifiManager) on Android 17; AOSP main adds a Looper.
-            val ctor = WifiManager::class.java.constructors.first { it.parameterCount in 2..3 && it.parameterTypes[0] == Context::class.java }
-            val args = arrayOf<Any?>(shellContext, service, Looper.getMainLooper()).copyOf(ctor.parameterCount)
-            wm = ctor.newInstance(*args) as WifiManager
-            syncConfig()
-        } catch (e: Throwable) {
-            AppLog.log("WifiManager over Shizuku failed: $e")
-        }
-    }
-
-    /**
-     * Writes our SSID, passphrase, a persistent (stable) BSSID and the auto-off timer into the system
-     * hotspot config, keeping everything else. Quick settings then start the same network the Mac knows.
-     */
     private fun syncConfig() {
-        val wm = wm ?: return
-        configSynced = runCatching {
-            val current = wm.call("getSoftApConfiguration") as SoftApConfiguration
-            val wanted = desiredConfig(current)
-            if (wanted != current) {
-                require(wm.call("setSoftApConfiguration", wanted) == true) { "rejected by the system" }
-                AppLog.log("Hotspot config written: SSID $ssid, auto-off ${autoOffMinutes.takeIf { it > 0 }?.let { "$it min" } ?: "never"}")
-            }
-            _blocked.value = blocklist(wanted).size
-            true
-        }.onFailure { AppLog.log("Hotspot config sync failed: $it") }.getOrDefault(false)
-    }
-
-    private fun desiredConfig(base: SoftApConfiguration?): SoftApConfiguration {
-        val b = base?.let { SoftApConfiguration.Builder::class.java.getConstructor(SoftApConfiguration::class.java).newInstance(it) }
-            ?: SoftApConfiguration.Builder()
-        if (Build.VERSION.SDK_INT >= 33) b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray())) else b.call("setSsid", ssid)
-        b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
-            // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
-            // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
-            .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
-        // Hidden setters. The default since Android 13 is a new random BSSID every session, which makes
-        // macOS treat each session as a new network and scan for it; persistent keeps it per SSID.
-        b.call("setMacRandomizationSetting", RANDOMIZATION_PERSISTENT)
-        b.call("setAutoShutdownEnabled", autoOffMinutes > 0)
-        if (autoOffMinutes > 0) b.call("setShutdownTimeoutMillis", autoOffMinutes * 60_000L)
-        return b.build()
-    }
-
-    private fun editBlocklist(edit: (List<MacAddress>) -> List<MacAddress>): Boolean {
-        val wm = wm ?: return false
-        return runCatching {
-            val current = wm.call("getSoftApConfiguration") as SoftApConfiguration
-            val list = edit(blocklist(current))
-            val b = SoftApConfiguration.Builder::class.java.getConstructor(SoftApConfiguration::class.java).newInstance(current)
-            b.call("setBlockedClientList", list)
-            require(wm.call("setSoftApConfiguration", b.build()) == true) { "rejected by the system" }
-            _blocked.value = list.size
-        }.onFailure { AppLog.log("Blocklist update failed: $it") }.isSuccess
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun blocklist(c: SoftApConfiguration) = c.call("getBlockedClientList") as List<MacAddress>
-
-    private fun onTetheringEvent(proxy: Any, method: Method, args: Array<Any?>?): Any? = when (method.name) {
-        "onClientsChanged" -> {
-            _clients.value = (args!![0] as Collection<*>).mapNotNull { runCatching { toClient(it!!) }.getOrNull() }
-            null
-        }
-        "onTetheredInterfacesChanged" -> {
-            // The Set<TetheringInterface> overload carries the config only since API 36.
-            (args!![0] as? Set<*>)?.takeIf { Build.VERSION.SDK_INT >= 36 }?.let { ifaces ->
-                val wifi = ifaces.filterIsInstance<TetheringInterface>()
-                    .firstOrNull { it.type == TetheringManager.TETHERING_WIFI }
-                tetheredSsid = wifi?.softApConfiguration?.wifiSsid?.bytes?.decodeToString()
-                _state.update { if (it.hotspot == Hotspot.ON) it.copy(ssid = tetheredSsid ?: it.ssid) else it }
-            }
-            null
-        }
-        "hashCode" -> System.identityHashCode(proxy)
-        "equals" -> proxy === args?.get(0)
-        "toString" -> "TetheringEvents"
-        else -> null
-    }
-
-    /** android.net.TetheredClient is hidden API; read it by reflection. */
-    private fun toClient(c: Any): Client? {
-        if (c.call("getTetheringType") != TetheringManager.TETHERING_WIFI) return null
-        val addresses = c.call("getAddresses") as List<*>
-        return Client(
-            mac = c.call("getMacAddress").toString(),
-            ip = addresses.firstNotNullOfOrNull { (it?.call("getAddress") as? LinkAddress)?.address?.hostAddress },
-            name = addresses.firstNotNullOfOrNull { it?.call("getHostname") as? String },
-        )
+        val shell = remote ?: return
+        configSynced = call("Hotspot config sync") { shell.syncConfig(ssid, pass, autoOffMinutes) }
     }
 
     private companion object {
-        const val SHELL_PACKAGE = "com.android.shell"
-        const val RANDOMIZATION_PERSISTENT = 1
         // Hidden WifiManager constants.
         const val ACTION_AP_STATE = "android.net.wifi.WIFI_AP_STATE_CHANGED"
         const val EXTRA_AP_STATE = "wifi_state"

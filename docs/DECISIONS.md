@@ -47,8 +47,8 @@ Since API 36 the typed `TetheringManager` API is public
 `TetheringEventCallback#onTetheredInterfacesChanged`). So instead of stubs:
 
 - build a `TetheringManager` with its hidden constructor
-  `(Context, Supplier<IBinder>)`, where the supplier returns the Shizuku-wrapped
-  `tethering` binder and the context reports `getOpPackageName() =
+  `(Context, Supplier<IBinder>)`, where the supplier returns the `tethering`
+  binder and the context reports `getOpPackageName() =
   "com.android.shell"`, `getAttributionTag() = null`. All binder calls then run
   as uid 2000, which holds `TETHER_PRIVILEGED` and `NETWORK_SETTINGS`
   (checked in AOSP `TetheringService#hasTetherChangePermission`).
@@ -64,9 +64,15 @@ Since API 36 the typed `TetheringManager` API is public
 - softAP state: `WIFI_AP_STATE_CHANGED` broadcast (only needs
   `ACCESS_WIFI_STATE`, see AOSP `SoftApManager#updateApState`) gives
   enabling / enabled / disabling / disabled / failed.
-- hidden API access: `org.lsposed.hiddenapibypass`.
+- where: all of the above runs in `HotspotShell`, a Shizuku user service, that is
+  a process Shizuku starts from our APK as uid 2000. Hidden API checks are off in
+  processes started by `app_process`, so no hidden API bypass is needed. Until
+  0.2.0 the app opened them in its own process with `org.lsposed.hiddenapibypass`
+  and Play Protect blocked that APK as harmful; Android 17 blocks the
+  `TetheringManager` constructor without it. The app talks to the service over
+  AIDL (`IHotspotShell`, `IHotspotEvents`).
 
-Borrowed from delta: the Shizuku binder-wrapping approach, the
+Borrowed from delta: running the calls as the shell user through Shizuku, the
 `com.android.shell` caller package and the Shizuku state handling
 (binder received/dead, permission listener). See `THIRD_PARTY_NOTICES.md`.
 

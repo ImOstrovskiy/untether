@@ -203,16 +203,14 @@ class HotspotService : Service() {
     /** Mobile data off and on again, as the shell user. */
     private suspend fun reconnectData() = withContext(Dispatchers.IO) {
         AppLog.log("Reconnecting mobile data")
-        shizukuShell("svc", "data", "disable")
+        hotspot.exec("svc", "data", "disable")
         delay(2_000)
-        val rc = shizukuShell("svc", "data", "enable")
+        val rc = hotspot.exec("svc", "data", "enable")
         AppLog.log("Mobile data back on (exit $rc)")
     }
 
     private fun setDataSim(subId: Int) {
-        runCatching { shizukuService("isub", "com.android.internal.telephony.ISub").call("setDefaultDataSubId", subId) }
-            .onSuccess { AppLog.log("Data SIM set to $subId") }
-            .onFailure { AppLog.log("Data SIM switch failed: $it") }
+        if (hotspot.setDataSim(subId)) AppLog.log("Data SIM set to $subId")
         telemetry.refreshSims()
     }
 

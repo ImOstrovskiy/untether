@@ -7,15 +7,8 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import org.lsposed.hiddenapibypass.HiddenApiBypass
 
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        // TetheringManager's constructor, stopTethering(int) and TetheredClient are hidden API.
-        HiddenApiBypass.setHiddenApiExemptions("L")
-    }
-}
+class App : Application()
 
 /** In-memory log shown in the UI, mirrored to logcat. */
 object AppLog {
