@@ -102,7 +102,7 @@ void phtSetIcon(const void *png, int len, const char *title) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSImage *glyphs = [[NSImage alloc] initWithData:data];
         CGFloat w = glyphs.representations.firstObject.pixelsWide / 2.0;
-        NSFont *font = [NSFont systemFontOfSize:15 weight:NSFontWeightSemibold];
+        NSFont *font = [NSFont systemFontOfSize:12.75 weight:NSFontWeightSemibold]; // 85 % of 15, like the glyphs
         CGFloat baseline = (18 - font.capHeight) / 2;
         NSDictionary *attrs = @{NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor};
         CGFloat gap = text.length ? 2.5 : 0;
