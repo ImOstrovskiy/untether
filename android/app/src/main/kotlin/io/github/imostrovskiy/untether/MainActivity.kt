@@ -116,6 +116,7 @@ private fun MainScreen() {
     val phone by HotspotService.phone.collectAsStateWithLifecycle()
     val settings by HotspotService.settings.collectAsStateWithLifecycle()
     val pairUntil by HotspotService.pairingUntil.collectAsStateWithLifecycle()
+    val network by HotspotService.network.collectAsStateWithLifecycle()
     val log by AppLog.lines.collectAsStateWithLifecycle()
 
     var hasPermissions by remember { mutableStateOf(MainActivity.hasRequired(ctx)) }
@@ -180,7 +181,7 @@ private fun MainScreen() {
                 item { ClientsCard(p) }
             }
             item { MacCard(pairUntil, phone?.extras?.findMac == true) }
-            HotspotService.pairing?.let { item { NetworkCard(it) } }
+            item { NetworkCard(network, settings.stockNetwork) }
             item { SettingsCard(settings) }
             item { LogCard(log) }
         }
@@ -381,10 +382,19 @@ private fun MacCard(pairUntil: Long, findingMac: Boolean) = Section(R.string.sec
 }
 
 @Composable
-private fun NetworkCard(credentials: Pairing) = Section(R.string.section_network) {
+private fun NetworkCard(credentials: Network?, stock: Boolean) = Section(R.string.section_network) {
     val ctx = LocalContext.current
     var visible by rememberSaveable { mutableStateOf(false) }
     fun copy(text: String) = ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(text, text))
+    InfoRow(
+        R.drawable.ic_settings,
+        stringResource(R.string.stock_network),
+        stringResource(R.string.stock_network_body),
+        Modifier.toggleable(value = stock, role = Role.Switch) {
+            HotspotService.start(ctx, HotspotService.ACTION_SET_STOCK_NETWORK) { putExtra(HotspotService.EXTRA_VALUE, it) }
+        },
+    ) { Switch(checked = stock, onCheckedChange = null) }
+    if (credentials == null) return@Section
     InfoRow(R.drawable.ic_wifi_tethering, stringResource(R.string.ssid), credentials.ssid) {
         IconButton(onClick = { copy(credentials.ssid) }) { Icon(painterResource(R.drawable.ic_content_copy), stringResource(R.string.copy)) }
     }

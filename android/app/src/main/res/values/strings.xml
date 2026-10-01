@@ -47,6 +47,8 @@
     <string name="section_network">Hotspot network</string>
     <string name="ssid">Network name</string>
     <string name="password">Password</string>
+    <string name="stock_network">Use Android\'s hotspot settings</string>
+    <string name="stock_network_body">Keeps the name, password and band set in Android. Pair the Mac again after switching or changing them.</string>
     <string name="copy">Copy</string>
     <string name="show_password">Show password</string>
     <string name="hide_password">Hide password</string>

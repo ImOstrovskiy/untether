@@ -34,6 +34,8 @@
 - **Control from the Mac.** Choose the SIM for mobile data, reconnect mobile data when it hangs,
   block a device on the hotspot, ring the phone when it is lost in the sofa.
 - **And back.** The phone can ring the Mac.
+- **Your network or Untether's.** By default the hotspot gets its own name and password; one switch
+  keeps the ones set in Android instead.
 - **Sensible defaults.** The hotspot turns off after a few idle minutes, a battery guard keeps it
   off below a chosen level, and the Mac can turn it off when it sleeps or leaves the network.
 - **Survives real life.** Doze, reboots, phone app updates, Bluetooth restarts: both sides have

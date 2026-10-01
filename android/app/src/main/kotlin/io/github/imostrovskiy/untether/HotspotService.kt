@@ -70,6 +70,7 @@ class HotspotService : Service() {
         const val ACTION_PAIR = "io.github.imostrovskiy.untether.PAIR"
         const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.untether.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
         const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.untether.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
+        const val ACTION_SET_STOCK_NETWORK = "io.github.imostrovskiy.untether.SET_STOCK_NETWORK" // extra EXTRA_VALUE, boolean
         const val ACTION_BLOCK = "io.github.imostrovskiy.untether.BLOCK" // extra EXTRA_MAC
         const val EXTRA_VALUE = "value"
         const val EXTRA_MAC = "mac"
@@ -91,8 +92,8 @@ class HotspotService : Service() {
         val phone = MutableStateFlow<PhoneState?>(null)
         val pairingUntil = MutableStateFlow(0L)
         val settings = MutableStateFlow(HotspotSettings())
-        @Volatile var pairing: Pairing? = null
-            private set
+        /** The network the Mac is given when pairing; null while unknown. */
+        val network = MutableStateFlow<Network?>(null)
 
         fun start(ctx: Context, action: String? = null, extras: Intent.() -> Unit = {}) {
             ctx.startForegroundService(Intent(ctx, HotspotService::class.java).setAction(action).apply(extras))
@@ -133,10 +134,14 @@ class HotspotService : Service() {
         )
         startForeground(NOTIFICATION_ID, notification(getString(R.string.notif_starting), shizukuLink = false),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        credentials = Pairing.load(this).also { pairing = it }
-        settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0))
-        hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes)
+        credentials = Pairing.load(this)
+        settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0), prefs.getBoolean("stock_network", false))
+        hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes, settings.value.stockNetwork)
             .also { it.open() }
+        // Our own network is known without Shizuku; Android's only once the shell service has read it.
+        combine(hotspot.network, settings) { n, s -> n ?: Network(credentials.ssid, credentials.pass).takeUnless { s.stockNetwork } }
+            .onEach { network.value = it }
+            .launchIn(scope)
         telemetry = TelemetryMonitor(this).also { it.open() }
         registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         openGatt()
@@ -160,6 +165,8 @@ class HotspotService : Service() {
                 ?.let { v -> updateSettings { it.copy(autoOffMinutes = v) } }
             ACTION_SET_BATTERY_MIN -> intent.getIntExtra(EXTRA_VALUE, -1).takeIf { it in BATTERY_MIN_STEPS }
                 ?.let { v -> updateSettings { it.copy(batteryMin = v) } }
+            ACTION_SET_STOCK_NETWORK -> intent.getBooleanExtra(EXTRA_VALUE, false)
+                .let { v -> updateSettings { it.copy(stockNetwork = v) } }
             ACTION_BLOCK -> intent.getStringExtra(EXTRA_MAC)?.let { mac ->
                 runCatching { MacAddress.fromString(mac) }.getOrNull()?.let(hotspot::block)
             }
@@ -217,9 +224,11 @@ class HotspotService : Service() {
     private fun updateSettings(change: (HotspotSettings) -> HotspotSettings) {
         val s = change(settings.value)
         settings.value = s
-        prefs.edit().putInt("auto_off", s.autoOffMinutes).putInt("battery_min", s.batteryMin).apply()
-        hotspot.autoOffMinutes = s.autoOffMinutes
-        AppLog.log("Settings: auto-off ${s.autoOffMinutes} min, battery guard ${s.batteryMin}%")
+        prefs.edit().putInt("auto_off", s.autoOffMinutes).putInt("battery_min", s.batteryMin)
+            .putBoolean("stock_network", s.stockNetwork).apply()
+        if (hotspot.autoOffMinutes != s.autoOffMinutes) hotspot.autoOffMinutes = s.autoOffMinutes
+        if (hotspot.stockNetwork != s.stockNetwork) hotspot.stockNetwork = s.stockNetwork
+        AppLog.log("Settings: auto-off ${s.autoOffMinutes} min, battery guard ${s.batteryMin}%, ${if (s.stockNetwork) "Android's" else "own"} network")
     }
 
     // battery > 0: until the first ACTION_BATTERY_CHANGED arrives the level reads 0, which must not trip the guard.
@@ -442,9 +451,10 @@ class HotspotService : Service() {
                 Protocol.STATE ->
                     if (offset == 0) stateBytes.also { longReads[device.address] = it }
                     else longReads[device.address] ?: stateBytes
-                Protocol.PAIRING ->
-                    if (SystemClock.elapsedRealtime() < pairingUntil.value) credentials.encode()
-                    else return reply(device, requestId, Protocol.ERR_PAIRING_CLOSED)
+                Protocol.PAIRING -> when {
+                    SystemClock.elapsedRealtime() >= pairingUntil.value -> return reply(device, requestId, Protocol.ERR_PAIRING_CLOSED)
+                    else -> credentials.encode(network.value ?: return reply(device, requestId, Protocol.ERR_SHIZUKU))
+                }
                 else -> return reply(device, requestId, BluetoothGatt.GATT_READ_NOT_PERMITTED)
             }
             if (ch.uuid == Protocol.PAIRING && offset == 0) AppLog.log("Pairing read by ${device.address}")
@@ -493,7 +503,7 @@ class HotspotService : Service() {
     }
 }
 
-data class HotspotSettings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0)
+data class HotspotSettings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0, val stockNetwork: Boolean = false)
 
 fun hotspotLabel(h: Hotspot) = when (h) {
     Hotspot.OFF -> R.string.hs_off

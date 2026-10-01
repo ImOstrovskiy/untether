@@ -131,6 +131,17 @@ func (a *app) turnOn(creds *Pairing) {
 		a.setNote(err.Error())
 		return
 	}
+	a.mu.Lock()
+	ssid := ""
+	if a.state != nil {
+		ssid = a.state.SSID
+	}
+	a.mu.Unlock()
+	if ssid != "" && ssid != creds.SSID {
+		// The phone switched to Android's own hotspot settings, or they changed: the stored password is stale.
+		a.setNote("@networkChanged")
+		return
+	}
 	// The new AP needs a few seconds to show up in scans; macOS auto-join may also beat us to it.
 	var err error
 	for range 8 {

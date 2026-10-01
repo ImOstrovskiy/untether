@@ -79,7 +79,7 @@ char *phtJoin(const char *ssid, const char *pass, int *scanned) {
         NSError *err = nil;
         if (!iface.powerOn && ![iface setPower:YES error:&err]) return strdup(err.localizedDescription.UTF8String);
         NSString *name = [NSString stringWithUTF8String:ssid];
-        NSString *password = [NSString stringWithUTF8String:pass];
+        NSString *password = pass[0] ? [NSString stringWithUTF8String:pass] : nil; // nil: open network
         loadLastNetwork();
         if (lastNetwork && [lastNetworkSSID isEqualToString:name]) {
             if ([iface associateToNetwork:lastNetwork password:password error:&err]) return NULL;

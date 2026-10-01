@@ -74,15 +74,16 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
      * hotspot config, keeping everything else. Quick settings then start the same network the Mac knows.
      */
     @Synchronized
-    override fun syncConfig(ssid: String, pass: String, autoOffMinutes: Int): String? = attempt {
+    override fun syncConfig(ssid: String?, pass: String?, autoOffMinutes: Int): String? = attempt {
         val wm = wm!!
         val current = wm.call("getSoftApConfiguration") as SoftApConfiguration
         val wanted = desiredConfig(current, ssid, pass, autoOffMinutes)
         if (wanted != current) {
             require(wm.call("setSoftApConfiguration", wanted) == true) { "rejected by the system" }
-            log("Hotspot config written: SSID $ssid, auto-off ${autoOffMinutes.takeIf { it > 0 }?.let { "$it min" } ?: "never"}")
+            log("Hotspot config written: SSID ${ssidOf(wanted)}, auto-off ${autoOffMinutes.takeIf { it > 0 }?.let { "$it min" } ?: "never"}")
         }
         events?.onBlocked(blocklist(wanted).size)
+        events?.onNetwork(ssidOf(wanted), wanted.passphrase.orEmpty())
     }
 
     @Synchronized
@@ -139,14 +140,17 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
         }
     }.onFailure { log("${cmd.joinToString(" ")} failed: $it") }.getOrDefault(-1)
 
-    private fun desiredConfig(base: SoftApConfiguration?, ssid: String, pass: String, autoOffMinutes: Int): SoftApConfiguration {
+    /** Our network (or, with ssid null, the one already set in Android) plus the settings Untether always owns. */
+    private fun desiredConfig(base: SoftApConfiguration?, ssid: String?, pass: String?, autoOffMinutes: Int): SoftApConfiguration {
         val b = base?.let { SoftApConfiguration.Builder::class.java.getConstructor(SoftApConfiguration::class.java).newInstance(it) }
             ?: SoftApConfiguration.Builder()
-        if (Build.VERSION.SDK_INT >= 33) b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray())) else b.call("setSsid", ssid)
-        b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
-            // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
-            // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
-            .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
+        if (ssid != null) {
+            if (Build.VERSION.SDK_INT >= 33) b.setWifiSsid(WifiSsid.fromBytes(ssid.toByteArray())) else b.call("setSsid", ssid)
+            b.setPassphrase(pass, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION)
+                // Fixed 5 GHz channel 36 (non-DFS almost everywhere). With automatic selection the channel
+                // moves between sessions and the Mac's cached network no longer matches (seen: 36 -> 40, +12 s).
+                .setChannels(SparseIntArray().apply { put(SoftApConfiguration.BAND_5GHZ, 36) })
+        }
         // Hidden setters. The default since Android 13 is a new random BSSID every session, which makes
         // macOS treat each session as a new network and scan for it; persistent keeps it per SSID.
         b.call("setMacRandomizationSetting", RANDOMIZATION_PERSISTENT)
@@ -154,6 +158,9 @@ class HotspotShell(private val ctx: Context) : IHotspotShell.Stub() {
         if (autoOffMinutes > 0) b.call("setShutdownTimeoutMillis", autoOffMinutes * 60_000L)
         return b.build()
     }
+
+    private fun ssidOf(c: SoftApConfiguration): String =
+        if (Build.VERSION.SDK_INT >= 33) c.wifiSsid?.bytes?.decodeToString().orEmpty() else @Suppress("DEPRECATION") c.ssid.orEmpty()
 
     @Suppress("UNCHECKED_CAST")
     private fun blocklist(c: SoftApConfiguration) = c.call("getBlockedClientList") as List<MacAddress>

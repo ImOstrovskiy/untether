@@ -46,6 +46,8 @@
     <string name="section_network">Мережа точки доступу</string>
     <string name="ssid">Назва мережі</string>
     <string name="password">Пароль</string>
+    <string name="stock_network">Налаштування точки доступу Android</string>
+    <string name="stock_network_body">Назва, пароль і діапазон лишаються такими, як в Android. Після перемикання або їх зміни сполучіть Mac знову.</string>
     <string name="copy">Копіювати</string>
     <string name="show_password">Показати пароль</string>
     <string name="hide_password">Сховати пароль</string>

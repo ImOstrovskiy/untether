@@ -27,6 +27,7 @@ class ShizukuHotspotController(
     private val ssid: String,
     private val pass: String,
     autoOffMinutes: Int,
+    stockNetwork: Boolean,
 ) {
     private val _state = MutableStateFlow(HotspotState())
     val state: StateFlow<HotspotState> = _state
@@ -40,6 +41,17 @@ class ShizukuHotspotController(
     /** Number of clients on the hotspot's blocklist. */
     private val _blocked = MutableStateFlow(0)
     val blocked: StateFlow<Int> = _blocked
+
+    /** The network in the system hotspot config, known once Shizuku is ready. */
+    private val _network = MutableStateFlow<Network?>(null)
+    val network: StateFlow<Network?> = _network
+
+    /** Keep the name, password and band set in Android's hotspot settings instead of ours. */
+    var stockNetwork = stockNetwork
+        set(value) {
+            field = value
+            syncConfig()
+        }
 
     /** 0 = never. Applied to the system hotspot config. */
     var autoOffMinutes = autoOffMinutes
@@ -94,6 +106,9 @@ class ShizukuHotspotController(
         override fun onBlocked(count: Int) {
             _blocked.value = count
         }
+        override fun onNetwork(ssid: String, pass: String) {
+            _network.value = Network(ssid, pass)
+        }
     }
 
     private val apReceiver = object : BroadcastReceiver() {
@@ -124,7 +139,7 @@ class ShizukuHotspotController(
         clearError()
         val shell = remote ?: return AppLog.log("start: Shizuku not ready")
         if (!configSynced) syncConfig()
-        call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced) }
+        call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced && !stockNetwork) }
     }
 
     fun stop() {
@@ -160,7 +175,7 @@ class ShizukuHotspotController(
         when (s) {
             AP_ENABLING -> HotspotState(Hotspot.STARTING)
             // The tethering callback does not always carry the config; the system config is ours anyway.
-            AP_ENABLED -> HotspotState(Hotspot.ON, ssid = tetheredSsid ?: ssid.takeIf { configSynced })
+            AP_ENABLED -> HotspotState(Hotspot.ON, ssid = tetheredSsid ?: _network.value?.ssid)
             AP_DISABLING -> HotspotState(Hotspot.STOPPING)
             // A failed start goes FAILED -> DISABLED; keep the error visible until the next command.
             AP_DISABLED -> if (cur.hotspot == Hotspot.ERROR) cur else HotspotState()
@@ -190,7 +205,9 @@ class ShizukuHotspotController(
 
     private fun syncConfig() {
         val shell = remote ?: return
-        configSynced = call("Hotspot config sync") { shell.syncConfig(ssid, pass, autoOffMinutes) }
+        configSynced = call("Hotspot config sync") {
+            shell.syncConfig(ssid.takeUnless { stockNetwork }, pass.takeUnless { stockNetwork }, autoOffMinutes)
+        }
     }
 
     private companion object {

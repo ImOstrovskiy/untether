@@ -7,4 +7,6 @@ oneway interface IHotspotEvents {
     void onClients(in String[] macs, in String[] ips, in String[] names);
     void onTetheredSsid(String ssid);
     void onBlocked(int count);
+    /** The network in the system hotspot config after a sync; pass is empty for an open network. */
+    void onNetwork(String ssid, String pass);
 }

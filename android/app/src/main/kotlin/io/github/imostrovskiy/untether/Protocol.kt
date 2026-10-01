@@ -62,6 +62,9 @@ data class HotspotState(val hotspot: Hotspot = Hotspot.OFF, val error: Int? = nu
 
 data class Client(val mac: String, val ip: String?, val name: String?)
 
+/** A hotspot network the Mac joins; pass is empty for an open network. */
+data class Network(val ssid: String, val pass: String)
+
 /** `net`: 0 none, 1 3G or older, 2 LTE, 3 5G NSA, 4 5G SA. `signal`: 0–4. `rsrp` dBm, `snr` dB. */
 data class Telemetry(
     val battery: Int = 0,

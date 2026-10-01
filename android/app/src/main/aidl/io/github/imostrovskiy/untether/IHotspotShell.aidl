@@ -12,6 +12,7 @@ interface IHotspotShell {
 
     String open(IHotspotEvents events) = 1;
     int apState() = 2;
+    /** ssid and pass null: keep the network set in Android's own hotspot settings. */
     String syncConfig(String ssid, String pass, int autoOffMinutes) = 3;
     String startTethering(String ssid, String pass, int autoOffMinutes, boolean withConfig) = 4;
     String stopTethering() = 5;
