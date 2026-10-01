@@ -154,14 +154,6 @@ func rasterize(parts, dim []shape, width, alpha float64) []byte {
 	return buf.Bytes()
 }
 
-// Menu bar styles, config.MenuIcon.
-const (
-	menuBoth   = ""          // the mark and the phone's signal
-	menuSignal = "signal"    // the signal alone
-	menuWhenOn = "connected" // the mark; the signal alone while the hotspot is on
-	menuMark   = "icon"      // the mark alone
-)
-
 // iconKey is everything the status item shows.
 type iconKey struct {
 	state, bars int // bars < 0: none
@@ -169,13 +161,14 @@ type iconKey struct {
 	label       string
 }
 
-// menuIcon is what the status item shows in a menu bar style. The mark stays whenever it has
-// something to say: no phone, a command running, an error.
-func menuIcon(st *State, busy, style string) iconKey {
+// menuIcon is what the status item shows: the app's mark, grey without the phone, until the
+// hotspot is on; then the phone's signal alone. A command running or an error brings the mark back.
+func menuIcon(st *State, busy string) iconKey {
 	k := iconKey{state: iconFor(st, busy), bars: -1, mark: true}
-	if st == nil || style == menuMark || (style == menuWhenOn && st.HS != hsOn) {
+	if k.state != iconOn {
 		return k
 	}
+	k.mark = false
 	switch {
 	case st.WiFi != nil: // the phone itself is on Wi-Fi, and the hotspot shares it
 		k.bars, k.label = min(max(*st.WiFi, 0), 4), "Wi-Fi"
@@ -185,6 +178,5 @@ func menuIcon(st *State, busy, style string) iconKey {
 			k.label = [...]string{"3G", "LTE", "5G", "5G"}[st.Net-1]
 		}
 	}
-	k.mark = style == menuBoth || (k.state != iconOn && k.state != iconOff)
 	return k
 }

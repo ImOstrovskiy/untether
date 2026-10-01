@@ -102,9 +102,8 @@ type uiState struct {
 	Note     string  `json:"note"`
 	JoinTook float64 `json:"joinTook,omitempty"`
 	Settings struct {
-		Login    bool   `json:"login"`
-		AutoOff  bool   `json:"autoOff"`
-		MenuIcon string `json:"menuIcon"`
+		Login   bool `json:"login"`
+		AutoOff bool `json:"autoOff"`
 	} `json:"settings"`
 	Phone *State `json:"phone"`
 }
@@ -118,8 +117,7 @@ func (a *app) render() {
 		Note: a.note, JoinTook: a.joinTook, Phone: a.state,
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
-	st.Settings.MenuIcon = a.cfg.MenuIcon
-	icon := menuIcon(a.state, a.busy, a.cfg.MenuIcon)
+	icon := menuIcon(a.state, a.busy)
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
 
@@ -179,16 +177,9 @@ func (a *app) handleAction(action, arg string) {
 			a.setNote("Launch at login: " + err.Error())
 		}
 		a.render()
-	case "autoOff", "menuIcon":
-		if action == "menuIcon" && arg != menuBoth && arg != menuSignal && arg != menuWhenOn && arg != menuMark {
-			return
-		}
+	case "autoOff":
 		a.mu.Lock()
-		if action == "autoOff" {
-			a.cfg.AutoOff = !a.cfg.AutoOff
-		} else {
-			a.cfg.MenuIcon = arg
-		}
+		a.cfg.AutoOff = !a.cfg.AutoOff
 		err := a.cfg.save()
 		a.mu.Unlock()
 		if err != nil {

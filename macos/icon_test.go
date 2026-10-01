@@ -48,21 +48,19 @@ func TestMenuIcon(t *testing.T) {
 	three := 3
 	wifi := &State{Net: 2, Sig: 1, HS: hsOn, Shz: shzOK, WiFi: &three}
 	for _, c := range []struct {
-		st    *State
-		style string
-		want  iconKey
+		st   *State
+		busy string
+		want iconKey
 	}{
-		{nil, menuBoth, iconKey{iconDisconnected, -1, true, ""}},
-		{lte, menuBoth, iconKey{iconOff, 3, true, "LTE"}},
-		{lte, menuSignal, iconKey{iconOff, 3, false, "LTE"}},
-		{broken, menuSignal, iconKey{iconError, 3, true, "LTE"}},
-		{lte, menuWhenOn, iconKey{iconOff, -1, true, ""}},
-		{on, menuWhenOn, iconKey{iconOn, 4, false, "5G"}},
-		{on, menuMark, iconKey{iconOn, -1, true, ""}},
-		{wifi, menuBoth, iconKey{iconOn, 3, true, "Wi-Fi"}},
+		{nil, "", iconKey{iconDisconnected, -1, true, ""}},
+		{lte, "", iconKey{iconOff, -1, true, ""}},
+		{broken, "", iconKey{iconError, -1, true, ""}},
+		{on, "", iconKey{iconOn, 4, false, "5G"}},
+		{on, "@turningOff", iconKey{iconBusy, -1, true, ""}},
+		{wifi, "", iconKey{iconOn, 3, false, "Wi-Fi"}},
 	} {
-		if got := menuIcon(c.st, "", c.style); got != c.want {
-			t.Errorf("menuIcon(%+v, %q) = %+v, want %+v", c.st, c.style, got, c.want)
+		if got := menuIcon(c.st, c.busy); got != c.want {
+			t.Errorf("menuIcon(%+v, %q) = %+v, want %+v", c.st, c.busy, got, c.want)
 		}
 	}
 }
