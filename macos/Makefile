@@ -8,8 +8,9 @@ SIGN_ID ?= $(shell security find-identity -p codesigning 2>/dev/null | grep -q "
 
 app:
 	CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(VERSION)" -o dist/untether .
-	rm -rf $(APP) && mkdir -p $(APP)/Contents/MacOS
+	rm -rf $(APP) && mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp Info.plist $(APP)/Contents/
+	cp AppIcon.icns $(APP)/Contents/Resources/
 	plutil -replace CFBundleShortVersionString -string "$(VERSION)" $(APP)/Contents/Info.plist
 	cp dist/untether $(APP)/Contents/MacOS/
 	codesign --force --timestamp=none --sign "$(SIGN_ID)" $(APP)
