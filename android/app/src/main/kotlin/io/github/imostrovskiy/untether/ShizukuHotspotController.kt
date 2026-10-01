@@ -37,8 +37,8 @@ import rikka.shizuku.Shizuku
  */
 class ShizukuHotspotController(
     private val ctx: Context,
-    private val ssid: String,
-    private val pass: String,
+    private var ssid: String,
+    private var pass: String,
     autoOffMinutes: Int,
     stockNetwork: Boolean,
 ) {
@@ -171,6 +171,14 @@ class ShizukuHotspotController(
         syncConfig()
         starting = true
         call("Start") { shell.startTethering(ssid, pass, autoOffMinutes, !configSynced && !stockNetwork, compatible) }
+    }
+
+    /** Writes a new network of our own into the system config, also when Android's settings are in use. */
+    fun setNetwork(ssid: String, pass: String) {
+        this.ssid = ssid
+        this.pass = pass
+        val shell = remote ?: return AppLog.log("New network: Shizuku not ready")
+        configSynced = call("Hotspot config write") { shell.syncConfig(ssid, pass, autoOffMinutes, compatible) } && !stockNetwork
     }
 
     /** Our hotspot failed to come up with the fast config: switch to the compatible one for good, once. */

@@ -46,6 +46,10 @@
     <string name="find_mac_body">The Mac plays a sound for 30 s.</string>
     <string name="stop">Stop</string>
     <string name="start">Start</string>
+    <string name="update_available">Untether %1$s is out</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="whats_new">What\'s new</string>
     <string name="stop_service">Stop Untether</string>
     <string name="stop_service_body">The Mac can\'t reach the phone until you start it again here</string>
     <string name="stopped_title">Untether is stopped</string>
@@ -55,6 +59,11 @@
     <string name="ssid">Network name</string>
     <string name="password">Password</string>
     <string name="stock_network">Use Android\'s hotspot settings</string>
+    <string name="randomize">Randomize</string>
+    <string name="randomize_title">New name and password</string>
+    <string name="randomize_body">Random ones, written to Android\'s hotspot settings</string>
+    <string name="randomize_confirm">Replace the hotspot\'s name and password?</string>
+    <string name="randomize_confirm_body">Devices that know the current hotspot will need the new password. The pairing window opens: then choose Pair with Phone on the Mac.</string>
     <string name="stock_network_body">Keeps the name, password and band set in Android. Pair the Mac again after switching or changing them.</string>
     <string name="copy">Copy</string>
     <string name="show_password">Show password</string>

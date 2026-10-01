@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"log/slog"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -115,7 +116,12 @@ type uiState struct {
 		AutoOff      bool `json:"autoOff"`
 		QuickConnect bool `json:"quickConnect"`
 	} `json:"settings"`
-	Phone *State `json:"phone"`
+	Phone  *State      `json:"phone"`
+	Update *updateInfo `json:"update,omitempty"`
+}
+
+type updateInfo struct {
+	Version string `json:"version"`
 }
 
 func (a *app) render() {
@@ -128,6 +134,9 @@ func (a *app) render() {
 	}
 	st.Settings.AutoOff = a.cfg.AutoOff
 	st.Settings.QuickConnect = a.cfg.QuickConnect
+	if a.update != nil {
+		st.Update = &updateInfo{a.update.version()}
+	}
 	icon := a.iconKey()
 	a.mu.Unlock()
 	st.Settings.Login = launchAtLogin()
@@ -193,6 +202,15 @@ func (a *app) handleAction(action, arg string) {
 		a.render()
 	case "toggle":
 		a.toggle()
+	case "installUpdate":
+		a.installUpdate()
+	case "releasePage":
+		a.mu.Lock()
+		r := a.update
+		a.mu.Unlock()
+		if r != nil {
+			_ = exec.Command("open", r.Page).Start()
+		}
 	case "quickToggle": // a click on the menu bar icon with quick connect on
 		a.setNote("")
 		a.toggle()

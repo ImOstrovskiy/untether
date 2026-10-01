@@ -108,6 +108,10 @@ certificate, not notarized, so macOS refuses the first launch. On macOS 15 and n
 enough. Or, in Terminal, `xattr -dr com.apple.quarantine /Applications/Untether.app`. Allow
 Bluetooth, and Location (macOS needs it to tell which Wi-Fi network the Mac is on).
 
+**Updates.** Both apps look for a new release on GitHub at start and every 12 hours and offer to
+install it in place: the Mac swaps in the new app (only if it is signed like the running one), the
+phone hands the APK to Android's installer.
+
 **Pair once.** On the phone tap **Pair** in the Mac section; on the Mac open **Settings → Pair with
 phone…**; confirm the same code on both screens.
 

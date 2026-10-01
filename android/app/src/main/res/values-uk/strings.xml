@@ -45,6 +45,10 @@
     <string name="find_mac_body">Mac грає звук 30 с.</string>
     <string name="stop">Зупинити</string>
     <string name="start">Запустити</string>
+    <string name="update_available">Вийшов Untether %1$s</string>
+    <string name="update_install">Встановити</string>
+    <string name="update_downloading">Завантажую…</string>
+    <string name="whats_new">Що нового</string>
     <string name="stop_service">Зупинити Untether</string>
     <string name="stop_service_body">Mac не дістанеться телефона, доки ви знову не запустите його тут</string>
     <string name="stopped_title">Untether зупинено</string>
@@ -54,6 +58,11 @@
     <string name="ssid">Назва мережі</string>
     <string name="password">Пароль</string>
     <string name="stock_network">Налаштування точки доступу Android</string>
+    <string name="randomize">Згенерувати</string>
+    <string name="randomize_title">Нові назва й пароль</string>
+    <string name="randomize_body">Випадкові, у налаштування точки доступу Android</string>
+    <string name="randomize_confirm">Замінити назву й пароль точки доступу?</string>
+    <string name="randomize_confirm_body">Пристроям, що знають поточну точку, знадобиться новий пароль. Відкриється вікно сполучення: потім виберіть «Сполучити з телефоном» на Mac.</string>
     <string name="stock_network_body">Назва, пароль і діапазон лишаються такими, як в Android. Після перемикання або їх зміни сполучіть Mac знову.</string>
     <string name="copy">Копіювати</string>
     <string name="show_password">Показати пароль</string>

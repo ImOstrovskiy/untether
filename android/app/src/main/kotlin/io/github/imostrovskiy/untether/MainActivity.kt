@@ -13,6 +13,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.Button
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -118,6 +122,8 @@ private fun MainScreen() {
     val pairUntil by HotspotService.pairingUntil.collectAsStateWithLifecycle()
     val network by HotspotService.network.collectAsStateWithLifecycle()
     val running by HotspotService.running.collectAsStateWithLifecycle()
+    val update by Updater.available.collectAsStateWithLifecycle()
+    val installing by Updater.installing.collectAsStateWithLifecycle()
     val log by AppLog.lines.collectAsStateWithLifecycle()
 
     var hasPermissions by remember { mutableStateOf(MainActivity.hasRequired(ctx)) }
@@ -147,6 +153,7 @@ private fun MainScreen() {
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            update?.let { u -> item { UpdateCard(u, installing) } }
             if (!running && HotspotService.stopped(ctx)) item {
                 Banner(R.drawable.ic_wifi_tethering_off, R.string.stopped_title, R.string.stopped_body, R.string.start) {
                     HotspotService.start(ctx, HotspotService.ACTION_RESUME)
@@ -190,6 +197,24 @@ private fun MainScreen() {
             item { NetworkCard(network, settings.stockNetwork) }
             item { SettingsCard(settings, running) }
             item { LogCard(log) }
+        }
+    }
+}
+
+/** A newer release: install it here, or read about it first. */
+@Composable
+private fun UpdateCard(update: Updater.Update, installing: Boolean) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        InfoRow(R.drawable.ic_download, stringResource(R.string.update_available, update.version))
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { scope.launch(Dispatchers.IO) { Updater.install(ctx, update) } }, enabled = !installing) {
+                Text(stringResource(if (installing) R.string.update_downloading else R.string.update_install))
+            }
+            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.page))) }) {
+                Text(stringResource(R.string.whats_new))
+            }
         }
     }
 }
@@ -427,6 +452,21 @@ private fun NetworkCard(credentials: HotspotNetwork?, stock: Boolean) = Section(
             HotspotService.start(ctx, HotspotService.ACTION_SET_STOCK_NETWORK) { putExtra(HotspotService.EXTRA_VALUE, it) }
         },
     ) { Switch(checked = stock, onCheckedChange = null) }
+    var confirm by rememberSaveable { mutableStateOf(false) }
+    InfoRow(R.drawable.ic_sync, stringResource(R.string.randomize_title), stringResource(R.string.randomize_body)) {
+        TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.randomize)) }
+    }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text(stringResource(R.string.randomize_confirm)) },
+        text = { Text(stringResource(R.string.randomize_confirm_body)) },
+        confirmButton = {
+            TextButton(onClick = { confirm = false; HotspotService.start(ctx, HotspotService.ACTION_RANDOMIZE) }) {
+                Text(stringResource(R.string.randomize))
+            }
+        },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(android.R.string.cancel)) } },
+    )
     if (credentials == null) return@Section
     InfoRow(R.drawable.ic_wifi_tethering, stringResource(R.string.ssid), credentials.ssid) {
         IconButton(onClick = { copy(credentials.ssid) }) { Icon(painterResource(R.drawable.ic_content_copy), stringResource(R.string.copy)) }

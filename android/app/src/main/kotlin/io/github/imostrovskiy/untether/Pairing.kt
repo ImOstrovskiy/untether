@@ -13,6 +13,9 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** HMAC secret + hotspot credentials. Generated once, kept encrypted with an Android Keystore key. */
 class Pairing(val secret: ByteArray, val ssid: String, val pass: String) {
+    /** The same secret with a new random network name and password, stored. */
+    fun withNewNetwork(ctx: Context): Pairing = generate().let { Pairing(secret, it.ssid, it.pass) }.also { save(ctx, it) }
+
     /** Value of the `pairing` characteristic: the secret and the network the hotspot uses now. */
     fun encode(net: HotspotNetwork): ByteArray = Cbor.encode(linkedMapOf("k" to secret, "s" to net.ssid, "p" to net.pass))
 
@@ -31,14 +34,18 @@ class Pairing(val secret: ByteArray, val ssid: String, val pass: String) {
                 .getOrNull()?.let { return it }
 
             val p = generate()
+            save(ctx, p)
+            AppLog.log("New pairing generated, SSID ${p.ssid}")
+            return p
+        }
+
+        private fun save(ctx: Context, p: Pairing) {
             val c = cipher(Cipher.ENCRYPT_MODE, null)
             val ct = c.doFinal(p.secret + "${p.ssid}\n${p.pass}".toByteArray())
-            prefs.edit()
+            ctx.getSharedPreferences("pairing", Context.MODE_PRIVATE).edit()
                 .putString("iv", Base64.encodeToString(c.iv, Base64.NO_WRAP))
                 .putString("ct", Base64.encodeToString(ct, Base64.NO_WRAP))
                 .apply()
-            AppLog.log("New pairing generated, SSID ${p.ssid}")
-            return p
         }
 
         private fun generate(): Pairing {

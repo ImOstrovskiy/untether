@@ -72,6 +72,7 @@ class HotspotService : Service() {
         const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.untether.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
         const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.untether.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
         const val ACTION_STOP = "io.github.imostrovskiy.untether.STOP"
+        const val ACTION_RANDOMIZE = "io.github.imostrovskiy.untether.RANDOMIZE"
         const val ACTION_RESUME = "io.github.imostrovskiy.untether.RESUME"
         const val ACTION_SET_STOCK_NETWORK = "io.github.imostrovskiy.untether.SET_STOCK_NETWORK" // extra EXTRA_VALUE, boolean
         const val ACTION_BLOCK = "io.github.imostrovskiy.untether.BLOCK" // extra EXTRA_MAC
@@ -86,6 +87,7 @@ class HotspotService : Service() {
         const val EXTRA_SUB_ID = "sub_id"
         private const val FIND_MAC_MS = 30_000L
         private const val HEARTBEAT_MS = 30_000L
+        private const val UPDATE_CHECK_MS = 12 * 60 * 60_000L
         private const val PAIRING_WINDOW_MS = 60_000L
         private const val RING_MS = 20_000L
         private const val NOTIFICATION_ID = 1
@@ -147,7 +149,7 @@ class HotspotService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         running.value = true
         credentials = Pairing.load(this)
-        settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0), prefs.getBoolean("stock_network", false))
+        settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0), prefs.getBoolean("stock_network", true))
         hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes, settings.value.stockNetwork)
             .also { it.open() }
         // Our own network is known without Shizuku; Android's only once the shell service has read it.
@@ -162,6 +164,12 @@ class HotspotService : Service() {
             .onEach(::publish)
             .launchIn(scope)
         scope.launch { watchdog() }
+        scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                Updater.check(this@HotspotService)
+                delay(UPDATE_CHECK_MS)
+            }
+        }
         AppLog.log("Service started")
     }
 
@@ -182,6 +190,13 @@ class HotspotService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_RESUME -> prefs.edit().putBoolean("stopped", false).apply()
+            ACTION_RANDOMIZE -> {
+                credentials = credentials.withNewNetwork(this)
+                hotspot.setNetwork(credentials.ssid, credentials.pass)
+                // The Mac only learns a network by pairing: open the window right away.
+                pairingUntil.value = SystemClock.elapsedRealtime() + PAIRING_WINDOW_MS
+                AppLog.log("New hotspot network ${credentials.ssid}; pairing window open for 60 s")
+            }
             ACTION_ON -> hotspot.start()
             ACTION_OFF -> hotspot.stop()
             ACTION_PAIR -> {
@@ -541,7 +556,8 @@ class HotspotService : Service() {
     }
 }
 
-data class HotspotSettings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0, val stockNetwork: Boolean = false)
+/** stockNetwork: keep the hotspot the user already has in Android, by default. */
+data class HotspotSettings(val autoOffMinutes: Int = 10, val batteryMin: Int = 0, val stockNetwork: Boolean = true)
 
 fun hotspotLabel(h: Hotspot) = when (h) {
     Hotspot.OFF -> R.string.hs_off

@@ -33,11 +33,12 @@ type app struct {
 	note      string // last problem, shown in the menu
 	onHotspot bool   // the Mac has been seen on the hotspot's Wi-Fi since it was turned on
 
-	lang     string  // UI language: en, uk
-	joinTook float64 // seconds from click to joined, last time
-	finding  bool    // the phone asked this Mac to play a sound
-	lastIcon iconKey // status item icon currently shown
-	blinkOff bool    // the busy mark is in the dim half of its blink
+	lang     string   // UI language: en, uk
+	joinTook float64  // seconds from click to joined, last time
+	finding  bool     // the phone asked this Mac to play a sound
+	lastIcon iconKey  // status item icon currently shown
+	blinkOff bool     // the busy mark is in the dim half of its blink
+	update   *release // a newer release, once found
 }
 
 func main() {
@@ -57,6 +58,7 @@ func main() {
 func (a *app) start() {
 	uiSetQuickConnect(a.cfg.QuickConnect)
 	go a.blink()
+	go a.watchUpdates()
 	a.render()
 	go func() {
 		for {

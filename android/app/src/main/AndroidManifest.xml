@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Updates: the latest release from GitHub, installed through the system installer. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
@@ -39,6 +42,10 @@
             android:name=".HotspotService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"
