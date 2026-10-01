@@ -79,11 +79,8 @@ var hook = []shape{
 }
 
 // Signal glyphs share the mark's box, which is also where macOS draws its own Wi-Fi icon: from
-// y = 3.5 to 20.5. The label (see phtSetIcon) stands on labelBaseline, the glyphs' bottom.
-const (
-	glyphTop, glyphBase = 3.5, 20.5
-	labelBaseline       = (24 - glyphBase) * 0.75 // points above the bottom of the 18 pt image
-)
+// y = 3.5 to 20.5, centered in the image like the label (see phtSetIcon).
+const glyphTop, glyphBase = 3.5, 20.5
 
 // hotspotIcon draws the template image (18 pt high @2x) for k: the mark for a state, then the
 // phone's signal, cellular bars or the Wi-Fi fan, unlit parts dimmed. At least one of the two.
@@ -124,10 +121,10 @@ func hotspotIcon(k iconKey) []byte {
 		}
 		width = left + 23.6 + 0.5
 	case k.bars >= 0:
-		// Proportions of the iPhone status bar: the tallest bar as tall as the Wi-Fi icon, bars
-		// 0.28 of that wide with 0.21 gaps, rising from 30 % in equal steps.
+		// After the iPhone status bar: the tallest bar as tall as the Wi-Fi icon, bars 0.23 of that
+		// wide with 0.21 gaps, rising from 30 % in equal steps.
 		const h = glyphBase - glyphTop
-		const w, gap = 0.28 * h, 0.21 * h
+		const w, gap = 0.23 * h, 0.21 * h
 		for i := range 4 {
 			x := left + (w+gap)*float64(i)
 			lit(i < k.bars, roundedBox(x, glyphBase-h*(0.3+0.7*float64(i)/3), x+w, glyphBase, 1.1))

@@ -6,7 +6,7 @@ package main
 #include <stdlib.h>
 void phtRun(const char *html);
 void phtEval(const char *js);
-void phtSetIcon(const void *png, int len, const char *title, double baseline);
+void phtSetIcon(const void *png, int len, const char *title);
 void phtShowPopover(void);
 void phtFindSound(int on);
 void phtQuit(void);
@@ -67,7 +67,7 @@ func uiEval(js string) {
 func uiSetIcon(png []byte, title string) {
 	ct := C.CString(title)
 	defer C.free(unsafe.Pointer(ct))
-	C.phtSetIcon(unsafe.Pointer(&png[0]), C.int(len(png)), ct, C.double(labelBaseline))
+	C.phtSetIcon(unsafe.Pointer(&png[0]), C.int(len(png)), ct)
 }
 func uiShow() { C.phtShowPopover() }
 func uiQuit() { C.phtQuit() }

@@ -93,23 +93,24 @@ void phtEval(const char *js) {
     });
 }
 
-// PNG bytes of an 18 pt high @2x template image, and a short label after it ("" for none) standing
-// on baseline (points above the image's bottom). The label goes into the same template image, so the
-// system tints it exactly like the glyphs, and like its own Wi-Fi icon.
-void phtSetIcon(const void *png, int len, const char *title, double baseline) {
+// PNG bytes of an 18 pt high @2x template image, and a short label after it ("" for none), its
+// capitals centered like the glyphs. The label goes into the same template image, so the system
+// tints it exactly like the glyphs, and like its own Wi-Fi icon.
+void phtSetIcon(const void *png, int len, const char *title) {
     NSData *data = [NSData dataWithBytes:png length:len];
     NSString *text = [NSString stringWithUTF8String:title];
     dispatch_async(dispatch_get_main_queue(), ^{
         NSImage *glyphs = [[NSImage alloc] initWithData:data];
         CGFloat w = glyphs.representations.firstObject.pixelsWide / 2.0;
-        // iPhone-like: capitals about three quarters of the bars.
-        NSFont *font = [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold];
+        NSFont *font = [NSFont systemFontOfSize:15 weight:NSFontWeightSemibold];
+        CGFloat baseline = (18 - font.capHeight) / 2;
         NSDictionary *attrs = @{NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor};
         CGFloat gap = text.length ? 2.5 : 0;
         CGFloat tw = text.length ? ceil([text sizeWithAttributes:attrs].width) : 0;
         NSImage *img = [NSImage imageWithSize:NSMakeSize(w + gap + tw, 18) flipped:NO drawingHandler:^BOOL(NSRect r) {
             [glyphs drawInRect:NSMakeRect(0, 0, w, 18)];
-            if (text.length) [text drawAtPoint:NSMakePoint(w + gap, baseline + font.descender) withAttributes:attrs];
+            // Without NSStringDrawingUsesLineFragmentOrigin the rect's origin is the baseline itself.
+            if (text.length) [text drawWithRect:NSMakeRect(w + gap, baseline, tw, font.capHeight) options:0 attributes:attrs];
             return YES;
         }];
         img.template = YES;

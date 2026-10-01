@@ -25,8 +25,8 @@ func TestSignalIcon(t *testing.T) {
 		width int
 	}{
 		{iconKey{state: iconOn, bars: -1, mark: true}, 36},
-		{iconKey{state: iconOn, bars: 2, mark: true}, 79},
-		{iconKey{state: iconOn, bars: 2}, 47},
+		{iconKey{state: iconOn, bars: 2, mark: true}, 74},
+		{iconKey{state: iconOn, bars: 2}, 42},
 		{iconKey{state: iconOn, bars: 2, wifi: true}, 37},
 	} {
 		if w := decode(t, hotspotIcon(c.k)).Bounds().Dx(); w != c.width {
@@ -34,10 +34,10 @@ func TestSignalIcon(t *testing.T) {
 		}
 	}
 	img := decode(t, hotspotIcon(iconKey{state: iconOn, bars: 2, mark: true}))
-	if a := alphaAt(img, 24.7, 19); a < 200 {
+	if a := alphaAt(img, 24.3, 19); a < 200 {
 		t.Errorf("lit bar alpha %d", a)
 	}
-	if a := alphaAt(img, 49.7, 19); a < 40 || a > 120 {
+	if a := alphaAt(img, 46.7, 19); a < 40 || a > 120 {
 		t.Errorf("unlit bar alpha %d, want dimmed", a)
 	}
 }
