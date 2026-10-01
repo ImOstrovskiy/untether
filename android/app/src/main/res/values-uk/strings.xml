@@ -42,6 +42,11 @@
     <string name="find_mac">Знайти Mac</string>
     <string name="find_mac_body">Mac грає звук 30 с.</string>
     <string name="stop">Зупинити</string>
+    <string name="start">Запустити</string>
+    <string name="stop_service">Зупинити Untether</string>
+    <string name="stop_service_body">Mac не дістанеться телефона, доки ви знову не запустите його тут</string>
+    <string name="stopped_title">Untether зупинено</string>
+    <string name="stopped_body">Mac не може дістатися телефона</string>
     <string name="ringing">Mac попросив телефон подзвонити</string>
     <string name="section_network">Мережа точки доступу</string>
     <string name="ssid">Назва мережі</string>

@@ -43,6 +43,11 @@
     <string name="find_mac">Find my Mac</string>
     <string name="find_mac_body">The Mac plays a sound for 30 s.</string>
     <string name="stop">Stop</string>
+    <string name="start">Start</string>
+    <string name="stop_service">Stop Untether</string>
+    <string name="stop_service_body">The Mac can\'t reach the phone until you start it again here</string>
+    <string name="stopped_title">Untether is stopped</string>
+    <string name="stopped_body">The Mac can\'t reach the phone</string>
     <string name="ringing">The Mac asked the phone to ring</string>
     <string name="section_network">Hotspot network</string>
     <string name="ssid">Network name</string>

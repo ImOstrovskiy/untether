@@ -117,6 +117,7 @@ private fun MainScreen() {
     val settings by HotspotService.settings.collectAsStateWithLifecycle()
     val pairUntil by HotspotService.pairingUntil.collectAsStateWithLifecycle()
     val network by HotspotService.network.collectAsStateWithLifecycle()
+    val running by HotspotService.running.collectAsStateWithLifecycle()
     val log by AppLog.lines.collectAsStateWithLifecycle()
 
     var hasPermissions by remember { mutableStateOf(MainActivity.hasRequired(ctx)) }
@@ -146,6 +147,11 @@ private fun MainScreen() {
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (!running && HotspotService.stopped(ctx)) item {
+                Banner(R.drawable.ic_wifi_tethering_off, R.string.stopped_title, R.string.stopped_body, R.string.start) {
+                    HotspotService.start(ctx, HotspotService.ACTION_RESUME)
+                }
+            }
             if (!hasPermissions) item {
                 Banner(R.drawable.ic_bluetooth, R.string.perm_title, R.string.perm_body, R.string.grant) {
                     permissionLauncher.launch(MainActivity.PERMISSIONS)
@@ -182,7 +188,7 @@ private fun MainScreen() {
             }
             item { MacCard(pairUntil, phone?.extras?.findMac == true) }
             item { NetworkCard(network, settings.stockNetwork) }
-            item { SettingsCard(settings) }
+            item { SettingsCard(settings, running) }
             item { LogCard(log) }
         }
     }
@@ -190,7 +196,7 @@ private fun MainScreen() {
 
 @Composable
 private fun Section(@StringRes title: Int, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(vertical = 8.dp)) {
             Text(
                 stringResource(title),
@@ -382,7 +388,7 @@ private fun MacCard(pairUntil: Long, findingMac: Boolean) = Section(R.string.sec
 }
 
 @Composable
-private fun NetworkCard(credentials: Network?, stock: Boolean) = Section(R.string.section_network) {
+private fun NetworkCard(credentials: HotspotNetwork?, stock: Boolean) = Section(R.string.section_network) {
     val ctx = LocalContext.current
     var visible by rememberSaveable { mutableStateOf(false) }
     fun copy(text: String) = ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(text, text))
@@ -412,7 +418,7 @@ private fun NetworkCard(credentials: Network?, stock: Boolean) = Section(R.strin
 }
 
 @Composable
-private fun SettingsCard(s: HotspotSettings) = Section(R.string.section_settings) {
+private fun SettingsCard(s: HotspotSettings, running: Boolean) = Section(R.string.section_settings) {
     val ctx = LocalContext.current
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     InfoRow(
@@ -427,6 +433,9 @@ private fun SettingsCard(s: HotspotSettings) = Section(R.string.section_settings
         if (s.batteryMin > 0) stringResource(R.string.battery_guard_value, s.batteryMin) else stringResource(R.string.off),
         Modifier.selectable(selected = false, role = Role.Button) { dialog = "battery" },
     )
+    if (running) InfoRow(R.drawable.ic_close, stringResource(R.string.stop_service), stringResource(R.string.stop_service_body)) {
+        TextButton(onClick = { HotspotService.start(ctx, HotspotService.ACTION_STOP) }) { Text(stringResource(R.string.stop)) }
+    }
     when (dialog) {
         "auto_off" -> ChoiceDialog(
             R.string.auto_off, HotspotService.AUTO_OFF_STEPS, s.autoOffMinutes,

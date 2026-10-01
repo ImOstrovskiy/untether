@@ -29,6 +29,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -70,6 +71,8 @@ class HotspotService : Service() {
         const val ACTION_PAIR = "io.github.imostrovskiy.untether.PAIR"
         const val ACTION_SET_AUTO_OFF = "io.github.imostrovskiy.untether.SET_AUTO_OFF" // extra EXTRA_VALUE, minutes
         const val ACTION_SET_BATTERY_MIN = "io.github.imostrovskiy.untether.SET_BATTERY_MIN" // extra EXTRA_VALUE, %
+        const val ACTION_STOP = "io.github.imostrovskiy.untether.STOP"
+        const val ACTION_RESUME = "io.github.imostrovskiy.untether.RESUME"
         const val ACTION_SET_STOCK_NETWORK = "io.github.imostrovskiy.untether.SET_STOCK_NETWORK" // extra EXTRA_VALUE, boolean
         const val ACTION_BLOCK = "io.github.imostrovskiy.untether.BLOCK" // extra EXTRA_MAC
         const val EXTRA_VALUE = "value"
@@ -93,9 +96,16 @@ class HotspotService : Service() {
         val pairingUntil = MutableStateFlow(0L)
         val settings = MutableStateFlow(HotspotSettings())
         /** The network the Mac is given when pairing; null while unknown. */
-        val network = MutableStateFlow<Network?>(null)
+        val network = MutableStateFlow<HotspotNetwork?>(null)
+
+        /** True while the service runs. */
+        val running = MutableStateFlow(false)
+
+        /** The user stopped the service: it stays stopped, also across reboots, until [ACTION_RESUME]. */
+        fun stopped(ctx: Context) = ctx.getSharedPreferences("settings", MODE_PRIVATE).getBoolean("stopped", false)
 
         fun start(ctx: Context, action: String? = null, extras: Intent.() -> Unit = {}) {
+            if (action != ACTION_RESUME && stopped(ctx)) return
             ctx.startForegroundService(Intent(ctx, HotspotService::class.java).setAction(action).apply(extras))
         }
     }
@@ -134,12 +144,13 @@ class HotspotService : Service() {
         )
         startForeground(NOTIFICATION_ID, notification(getString(R.string.notif_starting), shizukuLink = false),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        running.value = true
         credentials = Pairing.load(this)
         settings.value = HotspotSettings(prefs.getInt("auto_off", 10), prefs.getInt("battery_min", 0), prefs.getBoolean("stock_network", false))
         hotspot = ShizukuHotspotController(this, credentials.ssid, credentials.pass, settings.value.autoOffMinutes, settings.value.stockNetwork)
             .also { it.open() }
         // Our own network is known without Shizuku; Android's only once the shell service has read it.
-        combine(hotspot.network, settings) { n, s -> n ?: Network(credentials.ssid, credentials.pass).takeUnless { s.stockNetwork } }
+        combine(hotspot.network, settings) { n, s -> n ?: HotspotNetwork(credentials.ssid, credentials.pass).takeUnless { s.stockNetwork } }
             .onEach { network.value = it }
             .launchIn(scope)
         telemetry = TelemetryMonitor(this).also { it.open() }
@@ -155,6 +166,13 @@ class HotspotService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_STOP -> {
+                prefs.edit().putBoolean("stopped", true).apply()
+                AppLog.log("Stopped by the user")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_RESUME -> prefs.edit().putBoolean("stopped", false).apply()
             ACTION_ON -> hotspot.start()
             ACTION_OFF -> hotspot.stop()
             ACTION_PAIR -> {
@@ -266,6 +284,8 @@ class HotspotService : Service() {
         closeGatt()
         hotspot.close()
         telemetry.close()
+        running.value = false
+        phone.value = null
         AppLog.log("Service stopped")
         super.onDestroy()
     }
@@ -324,6 +344,11 @@ class HotspotService : Service() {
             .setOngoing(true)
             .setContentIntent(PendingIntent.getActivity(this, 0, target,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            .addAction(Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_close), getString(R.string.stop),
+                PendingIntent.getService(this, 1, Intent(this, HotspotService::class.java).setAction(ACTION_STOP),
+                    PendingIntent.FLAG_IMMUTABLE),
+            ).build())
             .build()
     }
 

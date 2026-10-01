@@ -43,8 +43,8 @@ class ShizukuHotspotController(
     val blocked: StateFlow<Int> = _blocked
 
     /** The network in the system hotspot config, known once Shizuku is ready. */
-    private val _network = MutableStateFlow<Network?>(null)
-    val network: StateFlow<Network?> = _network
+    private val _network = MutableStateFlow<HotspotNetwork?>(null)
+    val network: StateFlow<HotspotNetwork?> = _network
 
     /** Keep the name, password and band set in Android's hotspot settings instead of ours. */
     var stockNetwork = stockNetwork
@@ -63,6 +63,7 @@ class ShizukuHotspotController(
     private val main = Handler(Looper.getMainLooper())
     private var remote: IHotspotShell? = null
     private var bound = false
+    private var closed = false
     private var configSynced = false
     @Volatile private var tetheredSsid: String? = null
 
@@ -86,7 +87,7 @@ class ShizukuHotspotController(
             bound = false
             configSynced = false
             // The process died on its own (Shizuku itself going away is handled by its listeners): bind again.
-            main.postDelayed(::refreshShizuku, 1_000)
+            if (!closed) main.postDelayed(::refreshShizuku, 1_000)
         }
     }
 
@@ -107,7 +108,7 @@ class ShizukuHotspotController(
             _blocked.value = count
         }
         override fun onNetwork(ssid: String, pass: String) {
-            _network.value = Network(ssid, pass)
+            _network.value = HotspotNetwork(ssid, pass)
         }
     }
 
@@ -127,6 +128,7 @@ class ShizukuHotspotController(
     }
 
     fun close() {
+        closed = true
         main.removeCallbacksAndMessages(null)
         Shizuku.removeBinderReceivedListener(onBinder)
         Shizuku.removeBinderDeadListener(onDead)

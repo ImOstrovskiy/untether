@@ -14,7 +14,7 @@ import javax.crypto.spec.GCMParameterSpec
 /** HMAC secret + hotspot credentials. Generated once, kept encrypted with an Android Keystore key. */
 class Pairing(val secret: ByteArray, val ssid: String, val pass: String) {
     /** Value of the `pairing` characteristic: the secret and the network the hotspot uses now. */
-    fun encode(net: Network): ByteArray = Cbor.encode(linkedMapOf("k" to secret, "s" to net.ssid, "p" to net.pass))
+    fun encode(net: HotspotNetwork): ByteArray = Cbor.encode(linkedMapOf("k" to secret, "s" to net.ssid, "p" to net.pass))
 
     companion object {
         private const val ALIAS = "pairing"
